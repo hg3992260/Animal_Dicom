@@ -4,6 +4,7 @@
 *MPR 阅片 · SSD+VR 融合体绘制 · PACS 取片 · 病例档案（含 AI 引导补全）· 可被 AI Agent 通过 MCP 接管*
 
 [![Latest release](https://img.shields.io/badge/release-v1.0.0-orange)](../../releases/tag/v1.0.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![Qt](https://img.shields.io/badge/Qt-PySide6%20%2B%20PyCt6-green)](https://doc.qt.io/qtforpython/)
 [![VTK](https://img.shields.io/badge/VTK-9.2%2B-lightgrey)](https://vtk.org/)
@@ -228,9 +229,13 @@ python tools/verify/trial_guard_test.py     # 对抗性：到期/篡改/改时�
 
 ## 许可与致谢
 
-- 本项目为私有仓库（`hg3992260/Animal_Dicom`）；**未附带开源许可证**，未经授权请勿再分发。
+- **许可：[MIT License](LICENSE)**（Copyright © 2026 Paul）。可自由使用、修改、分发，需保留版权与许可声明。
+- ⚠️ **请注意版本与许可的关系**：源码是 MIT（任何人都可自行构建/去除期限逻辑），而**分发的构建产物**
+  带 30 天运行期限（见[运行期限](#运行期限30-天强制)）。若希望发布产物具备真正的期限约束，
+  需要改为私有分发 + 服务端许可证，或换用非开源许可。
 - 体绘制与 CR 路径追踪参考并沿用原 `SSD+VR Fusion Viewer` 的实现；`ErCore.dll` 由
-  `exposure-render-master`（第三方 CUDA 路径追踪引擎）构建，其许可与版权归原作者。
+  `exposure-render-master`（第三方 CUDA 路径追踪引擎）构建，其许可与版权归原作者
+  （该目录自身未附 LICENSE 文件，分发产物前请确认上游许可）。
 - 感谢 PySide6 / PyCt6 / VTK / SimpleITK / pynetdicom / SAM-Med3D 等开源项目。
 
 ---

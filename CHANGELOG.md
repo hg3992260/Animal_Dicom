@@ -59,5 +59,10 @@
 ### 已知问题
 
 - 基础版不含 3D SAM（需完整版依赖与 ~383 MB 权重）；CR 模式需 `ErCore.dll`。
+- `.github/workflows/` 三个流水线文件暂未纳入仓库（提交令牌缺少 `workflow` scope），文件仍在本地工作区。
 - 依赖清点发现 `scientific.json` / `render_templates.json` 在代码中零引用（保留待清理）。
 - `segmentation/sam_adapter.py`、`detectors/synthseg_detector.py` 带 UTF-8 BOM（不影响运行）。
+
+### 许可
+
+- 仓库采用 **MIT License**；源码可自由构建，分发的构建产物带 30 天运行期限——两者关系见 README「许可与致谢」。
