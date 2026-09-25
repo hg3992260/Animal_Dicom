@@ -16,15 +16,16 @@ dist/
 build_animal/
 dist_animal/
 *.egg-info/
-# 注：spec 是**构建配置**（复现 Release / CI 都需要），从下面的 *.spec 规则里放行
-!animal_dicom.spec
-!ssd_vr_viewer_macos.spec
 *.dll
 !exposure-render-master/**/ErCore.dll
 *.exe
 *.so
 *.o
 *.spec
+# 注：.gitignore 是"后匹配优先"，所以放行必须写在 *.spec **之后**
+# spec 是**构建配置**（复现 Release / CI 都需要），不是产物：
+!animal_dicom.spec
+!ssd_vr_viewer_macos.spec
 
 # Dependencies
 pv_packages/
