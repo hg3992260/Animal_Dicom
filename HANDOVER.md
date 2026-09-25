@@ -1,5 +1,287 @@
 # 项目交接文档 — SSD+VR Viewer (animal_dicom)
 
+> 轮次: Round 39 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: 渲染功能核对 + EXE Release
+
+---
+
+## 1. 任务摘要
+
+用户提出两点：① **确认渲染功能是否全部保留**；② **要 release 的是 exe 文件**（此前 Release 只有源码包）。
+
+本轮完成：
+1. **渲染功能逐项核对**（与原始版 `I:\SSD+VR_github\ssd_vr_viewer.py` 对照 + 运行时逐模式实测）→ **结论：全部保留，无回归**。
+2. **构建 Windows 便携版 EXE** 并作为 Release 资产上传（`Animal_Dicom_v1.0.0_win64_portable.zip`，**424 MB**）。
+3. 顺带修掉 2 个真缺陷（桥 op 超时不传递、冻冷版缺 PyCt6 数据文件）与 2 处冻结版适配。
+4. 新增 `animal_dicom.spec`（入库），文档补「下载即用」「冻结版打包实录」。
+
+## 2. 渲染功能核对结论（关键交付）
+
+### 2.1 代码级对照（vs 原始版，同条件 `ast`/正则提取）
+
+| 项 | 原始版 | 当前版 | 结论 |
+|---|---|---|---|
+| 渲染模式映射 `index → render_mode` | 11 项（+index 0 = stable） | **11 项完全一致** | ✅ 12 模式全在 |
+| 渲染相关控件/状态属性 | 88 个 | **88 个** | ✅ 无缺失 |
+| 渲染相关方法 | 157 个 | **237 个** | ✅ 无缺失（新增 80 个） |
+| 缺失的属性 | — | `kedge_renderer`、`roi_progress_bar` | 属 **K-edge 页 / 自动ROI 页**（早期轮次已删，非渲染页） |
+| 缺失的方法 | — | 20 个（`_load_kedge_data`/`_render_kedge_material`/`on_roi_start`/`_scan_weight_dir` …） | 同上，全属已删功能 |
+
+### 2.2 运行时逐模式实测（每个模式**独立冷启动**，避免状态污染）
+
+| 模式 | 耗时 | 截图 unique_colors | 判定 |
+|---|---|---|---|
+| stable | 0.8 s | 6056 | ✅ |
+| hd_surface | 1.5 s | 19078 | ✅ |
+| cinematic | 1.4 s | 28567 | ✅ |
+| nature_channels | 1.4 s | 6821 | ✅ |
+| figure8_channels | 1.6 s | 5231 | ✅ |
+| layer_channel | 1.5 s | 62 | ⚠️ 稀疏（原版同条件 339 / 深色背景） |
+| frangi_channel | **405.1 s** | 68 | ⚠️ 稀疏 + 慢（**原版 408.4 s**，非回归） |
+| bone_mono | 1.5 s | 6626 | ✅ |
+| 2dtf | 3.9 s | 17842 | ✅ |
+| spectral | 1.5 s | 4102 | ✅ |
+| exposure_render | 1.7 s | 12203 | ✅ |
+| dual_volume | 0.0 s | 36952 | ✅ |
+
+- 模式切换触发**整段重预处理**（`on_mode_change` 内 `self.load_dicom()`）是**两版一致**的既有设计
+  （原始版 280 行含 1 次 `self.load_dicom()`、`check_frangi`×4、`check_2dtf`×4，当前版同）。
+- `layer_channel`/`frangi_channel` 在本体模上渲染稀疏 → 两版都一样（背景色不同导致颜色计数差异）。
+
+### 2.3 顺带发现的真缺陷（已修）
+
+| 缺陷 | 现象 | 修复 |
+|---|---|---|
+| 桥未把 op 超时发给 GUI | 客户端 `timeout` 形同虚设，桥侧恒 120 s → 切 `frangi_channel`（405 s）必然返回"主线程执行超时" | `bridge_client.call` 现在在请求里带 `timeout`（桥协议本就支持） |
+| 冻结版缺 PyCt6 数据文件 | EXE 启动即 `Unhandled exception in script`（无桥、无锚点）；`--noconsole` 下用户看不到原因 | spec 用 `collect_all('PyCt6')`；`__main__` 增加 `startup_error.log` 崩溃日志 |
+| 期限锚点写在解包目录 | 冻结版 `__file__` 指向一次性解包目录 | `license_guard._app_dir()`：`sys.frozen` 下用 `sys.executable` 目录 |
+
+## 3. EXE 构建（`animal_dicom.spec`，已入库）
+
+| 指标 | 值 |
+|---|---|
+| 命令 | `pyinstaller --clean --noconfirm animal_dicom.spec`（3.5 分钟） |
+| onedir 体积 | **1.16 GB**（首版 3.63 GB → 裁剪后） |
+| Release 资产 | `Animal_Dicom_v1.0.0_win64_portable.zip` **424.2 MB** |
+| sha256 | `5835179a543a0dea51fabc64958925063bfe9b4a32d0011370d41f906fffc4b7`（与 GitHub `digest` 一致） |
+
+**体积取舍**：排除 `torch/medim/torchio/dipy/monai/totalseg`（~4.5 GB）与 CUDA 运行时
+`cupy/nvidia`（~1.9 GB：`cublasLt64_12.dll` 660 MB、`cusparse64_12.dll` 367 MB…），
+并过滤未使用的 `QtWebEngine/QtQuick`（~270 MB）。
+**保留**：12 渲染模式、MPR、PACS、档案、AI、期限、**ErCore.dll**（CR 路径追踪）。
+**代价**：Frangi 等 GPU 路径回退 CPU（较慢）；3D SAM 不可用。
+
+**冻结版冒烟 12/12**：桥就绪 / `license_guard` 随包（trial ok，剩余 29.94 天）/ 5 页签 /
+右区显隐 / 加载 176 层 CT / `stable·cinematic·dual_volume` 渲染（6056·28567·1447 色）/
+设置与档案可读 / 整窗截图 / 退出 rc=0。
+
+## 4. 文件变更清单
+
+| 文件 | 操作 | 摘要 |
+|------|------|------|
+| `animal_dicom.spec` | **新增** | Windows onedir 打包配置（含 excludes/过滤/`collect_all PyCt6`） |
+| `ssd_vr_viewer.py` | 修改 | `__main__` 加 try/except → `startup_error.log` |
+| `license_guard.py` | 修改 | `_app_dir()` 支持 `sys.frozen`（锚点写到 exe 同目录） |
+| `mcp_ssd_vr/bridge_client.py` | 修改 | 请求带 `timeout`（桥侧不再恒 120 s） |
+| `.gitignore` | 修改 | 加 `build_animal/ dist_animal/`；**修正顺序**使 `!*.spec` 生效 |
+| `ssd_vr_viewer_macos.spec` | 入库 | 此前被 `*.spec` 忽略（CI 取不到，属潜在故障） |
+| `README.md` | 修改 | 新增「下载即用（预编译产物）」表 + 构建要点（PyCt6 数据文件坑） |
+| `DEPENDENCIES.md` | 修改 | 新增 **§8 冻结版打包实录**（体积取舍/踩坑/基础版 vs 完整版对比/冒烟结果） |
+| `CHANGELOG.md` | 修改 | 补 EXE 资产与 2 处修复 |
+| `tools/verify/`（temp → 会话内新增） | — | 本轮验证脚本：`render_verify*.py`、`render_mode_matrix.py`、`exe_smoke.py`（在 `temp/`，未入库） |
+
+## 5. 验证证据
+
+| 项 | 结果 |
+|---|---|
+| 冻结版冒烟（`temp/exe_smoke.py`） | **12/12 PASS**，退出 rc=0 |
+| 便携包 zip 内容 | 6953 条目；含 `Animal_Dicom.exe`(32.3 MB)、`_internal/PySide6/plugins/platforms/qwindows.dll`、`ErCore.dll`(5.0 MB)、`retro.qss`、`PyCt6/widgets/themes/orange.json`、`README-FIRST.txt` |
+| 资产完整性 | 本地 sha256 == GitHub `asset.digest`（`5835…c4b7`） |
+| tag/commit 一致性 | 远端 tag `v1.0.0` == 本地 HEAD == `8bbc505e…` |
+| Release 状态 | `Latest`、`draft=false`、`prerelease=false`，资产 424.2 MB |
+| 渲染对照 | 模式映射一致 / 控件 88-88 / 方法零缺失；逐模式 10 个出画面、`frangi` 405 s（原版 408 s） |
+| 代码库 | `git log`：`8bbc505`(spec) ← `2c0efd5` ← `d738d65`(spec/EXE/修复) ← `4d8fe6f`(许可修正) ← … |
+
+Release: <https://github.com/hg3992260/Animal_Dicom/releases/tag/v1.0.0>
+
+## 6. 关键决策
+
+| 决策点 | 选择 | 原因 |
+|--------|------|------|
+| 打包形态 | onedir + zip（便携包） | 与项目既有 `main-full.yml` 一致；onefile 每次启动要解包 1.16 GB |
+| 体积裁剪 | 排 torch + CUDA，保 ErCore | 单资产 2 GB 上限；渲染 12 模式不依赖 torch；ErCore 是 CR 模式必需 |
+| 是否保留 cupy | **排除** | 含 cupy 会被整链拉入 ~1.9 GB CUDA 运行时；代码本就有 CPU 回退 |
+| 是否在 Release 附完整版 | 否 | 5.9 GB onedir 无法作为资产；完整版走源码/CI |
+| 渲染"回归"判定方法 | 每模式**独立冷启动** + 与原版同条件对照 | 顺序切换会被重预处理污染，得出假象 |
+
+## 7. 遗留问题与待办
+
+- [ ] **`.github/workflows/` 仍未入库**（令牌缺 `workflow` scope）：`gh auth refresh -h github.com -s workflow` 后可补提交（文件在本地工作区）。
+- [ ] **同一次会话内依次切换 frangi/bone_mono/2dtf 后，渲染区可能保持空白**（重预处理替换了 volume/mapper，
+      模式专属 TF 设置未重新应用）。属既有设计缺陷（两版一致），本轮未改以免影响发版；
+      规避：切到这类模式后重新选择一次模式或重新加载。建议后续把 `on_mode_change` 末尾的
+      `self.load_dicom()` 改为异步（`QTimer.singleShot`），并在重载完成后重新应用模式设置。
+- [ ] GPU Frangi / 3D SAM 未进便携包：如需，可基于 `animal_dicom.spec` 去掉 excludes 中
+      `cupy/nvidia` 或 `torch/medim` 重打包（体积分别 +1.9 GB / +4.5 GB，将超 2 GB 资产上限，
+      需拆包或走 CI 产物）。
+- [ ] 便携包写在 exe 同级目录的 `mcp_records/`（档案/ROI/事件）；若放到 `C:\Program Files`
+      可能无写权限 → 建议引导用户放可写目录（已在 `README-FIRST.txt` 说明）。
+
+## 8. 错误记录
+
+| 时间 | 级别 | 来源 | 描述 | 解决状态 |
+|------|------|------|------|---------|
+| - | error | 打包 | `Aborting build process due to attempt to collect multiple Qt bindings packages`（环境里装了 PyQt5） | ✅ excludes 加 PyQt5/PyQt6/PySide2 |
+| - | error | 打包 | `PermissionError: [WinError 5] 拒绝访问 …Animal_Dicom.exe` | ✅ 上一轮诊断启动的 EXE 进程未退出、文件被占用 → 先 kill 再建 |
+| - | error | 冒烟 | EXE 启动即 `Unhandled exception in script`，无桥/无锚点 | ✅ 根因 PyCt6 数据文件未收集（`collect_all('PyCt6')`）；并加 `startup_error.log` |
+| - | warn | 体积 | 首版 onedir 3.63 GB | ✅ 排 CUDA/QtWebEngine → 1.16 GB |
+| - | warn | git | `*.spec` 被忽略（两次：先后顺序问题） | ✅ `.gitignore` 后匹配优先 → 放行规则移到 `*.spec` 之后 |
+| - | info | 桥 | 客户端 timeout 未传，导致 405 s 的 op 被桥判超时 | ✅ 已修并将教训写入 CHANGELOG |
+
+---
+
+## 历史轮次
+<details>
+<summary>Round R-38 — 2026-09-26 | 依赖清点 + GitHub 上传 + v1.0.0 Release (点击展开)</summary>
+
+# 项目交接文档 — SSD+VR Viewer (animal_dicom)
+
+> 轮次: Round 38 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: 依赖清点 + GitHub 上传 + v1.0.0 Release
+
+---
+
+## 1. 任务摘要
+
+用户要求：**清点程序的依赖资源代码 → 上传到 https://github.com/hg3992260/Animal_Dicom →更新 About 与 README → 触发 release（版本 1.0.0）**。
+
+本轮完成：
+1. **依赖与资源清点**（`ast` 解析全仓 68 个 Python 源文件的 import，与 requirements / build.yaml / spec 交叉核对）
+   → 产出 **`DEPENDENCIES.md`**，并顺带修掉 3 处打包/依赖缺口。
+2. **文档重写**：`README.md` 重写为 Animal_Dicom v1.0.0（含五页签工作流、MCP、运行期限、FAQ、许可）；
+   新增 `CHANGELOG.md`；窗口标题与 argparse 描述改为产品身份。
+3. **仓库 About**：description / homepage / 13 个 topics（`veterinary · dicom · pyside6 · vtk · medical-imaging …`）。
+4. **首次上传**：`git init` → 拉取 `origin/main` → `reset`（**保留远端 Initial commit 与 LICENSE**）→ 3 次提交 → 推送。
+5. **Release**：`v1.0.0`（Latest、非草稿、非预发布），远端 tag 与 HEAD 一致。
+
+## 2. 阶段进度
+
+| # | 阶段 | 状态 | 说明 |
+|---|------|------|------|
+| 1 | 侦察（git/gh/远端状态） | ✅ | gh 已登录 hg3992260（scope: gist, read:org, **repo**）；目标仓库私有、`main`、已有 1 个 Initial commit |
+| 2 | 依赖资源清点 | ✅ | `DEPENDENCIES.md`（必需/可选/遗留 + 资源表 + 不入库清单 + 6 个发现） |
+| 3 | 修打包缺口 | ✅ | requirements 补 openpyxl；build.yaml/spec 补 license_guard 等 hidden-imports 与 5 个数据文件 |
+| 4 | README/CHANGELOG/About | ✅ | README 重写 496→~200 行（中文为主 + English 摘要）；13 topics |
+| 5 | 上传 | ✅ | 4 次提交；远端 108 blob / 5.96 MB |
+| 6 | Release v1.0.0 | ✅ | Latest；tag = HEAD = `4d8fe6f` |
+
+## 3. 文件变更清单
+
+| 文件 | 操作 | 变更摘要 |
+|------|------|---------|
+| `DEPENDENCIES.md` | **新增** | 依赖与资源清点（7 节：第三方依赖分组 / 运行期资源 / 仓库内模块 / 外部二进制权重 / 不入库清单 / 6 个清点发现 / 一句话画像） |
+| `CHANGELOG.md` | **新增** | v1.0.0 变更记录（新增/移除/修复/打包/已知问题/许可） |
+| `README.md` | **重写** | 改为 Animal Dicom：English 摘要、目录、五页签工作流、依赖速览、MCP、运行期限、构建、目录结构、自检脚本、FAQ、MIT 许可 |
+| `.gitignore` | 修改 | 追加：`digital_body/`、`SSD_VR_Fusion_Viewer_Full_Win(.zip)`、`*.zip`、`mcp_records/`、`.opencode/`、`.dbg/`、`.trial_anchor.json`、`crash*.txt`、`*.docx`、`*.bak_*`、`.assemble*.py` |
+| `.gitattributes` | **新增** | `* text=auto eol=lf`；图片/二进制显式 `binary`；源文件固定 LF |
+| `requirements.txt` | 修改 | 补 `openpyxl>=3.1.0`；注明 `fastmcp` 为 MCP server 侧可选 |
+| `build.yaml` | 修改 | 产品名/版本 → Animal_Dicom 1.0.0；datas 补 5 个资源；hidden_imports 补 `license_guard`/`deepseek_client`/`openpyxl`/`mcp_ssd_vr.dicom`/`mcp_ssd_vr.tools*`；build_command 同步 |
+| `ssd_vr_viewer_macos.spec` | 修改 | datas 补 5 个资源 + `logo.icns`；hiddenimports 补 `license_guard`/`deepseek_client`/`openpyxl`/`mcp_ssd_vr.dicom`/`tools*` |
+| `ssd_vr_viewer.py` | 修改 | 窗口标题 → `Animal Dicom · 爱宠影像工作站 v1.0.0`；argparse 描述同步 |
+| `tools/verify/*` | 迁移 | 三个自检脚本从 `temp/`（被 ignore）移到 `tools/verify/` 以便随仓库分发 |
+| `docs/images/animal-*.png` | **新增** | 4 张当前界面截图（爱宠列表 / MPR / 档案中心 / 设置），供 README 引用 |
+
+## 4. 关键代码 Diff 摘要
+
+### 4.1 打包配置（`build.yaml`）
+```diff
+-  name: SSD_VR_Fusion_Viewer
+-  version: "2.0.1"
++  name: Animal_Dicom
++  version: "1.0.0"
+ datas:
++  - { source: light.qss,            dest: "." }
++  - { source: retro.qss,            dest: "." }
++  - { source: warm_orange.json,     dest: "." }
++  - { source: case_template.json,   dest: "." }
++  - { source: render_templates.json, dest: "." }
+ hidden_imports:
++  - license_guard      # 缺失 → 冻结版启动即"完整性检查失败"（退出码 4）
++  - deepseek_client
++  - openpyxl
++  - mcp_ssd_vr.tools.cases
+```
+
+### 4.2 依赖声明（`requirements.txt`）
+```diff
+ Pillow>=10.0.0          # PyInstaller --icon 需转 .ico，截图亦用
++openpyxl>=3.1.0         # 「已保存 ROI → 一键导出 Excel」(_sam_export_roi_excel)
+```
+
+### 4.3 产品身份（`ssd_vr_viewer.py`）
+```diff
+- self.setWindowTitle("SSD+VR Fusion Viewer")
++ self.setWindowTitle("Animal Dicom · 爱宠影像工作站 v1.0.0")
+- parser = argparse.ArgumentParser(description="PySide6 SSD+VR DICOM viewer (Figure 8 style fusion).")
++ parser = argparse.ArgumentParser(
++     description="Animal Dicom — 爱宠（犬猫）CT/DR/MRI 离线影像工作站 v1.0.0")
+```
+
+## 5. 关键决策
+
+| 决策点 | 选择 | 原因 |
+|--------|------|------|
+| 入库范围 | 仅源码 + 小型资源（~6 MB / 108 文件） | `digital_body/` 99 GB、`temp/` 10 GB、冻结版 5.9 GB、权重 2.3 GB、`mcp_records/` 70 MB（且含本机期限锚点） |
+| 与远端历史的关系 | `git init` + `fetch` + `reset origin/main` 后提交（**不 force-push**） | 保留远端 `Initial commit` 与 `LICENSE`；实测暂存区 0 删除 |
+| `mcp_records/` | 排除 | 含病例档案/ROI 统计/SQLite 事件与本机 `.trial_anchor.json`（入库会污染其他机器） |
+| 自检脚本位置 | `temp/` → `tools/verify/` | `temp/` 被 ignore；自检脚本本身是交付物 |
+| Release 资产 | 未附 EXE/DMG | 冻结版 zip 5.9 GB（远超 GitHub 单资产 2 GB），应走 Actions 产物或另行分发 |
+| 许可 | 沿用仓库既有 **MIT** | 远端 Initial commit 已带 MIT LICENSE；同时更正 README 原"无许可"的错误表述 |
+
+## 6. 验证证据（客观）
+
+| 项 | 结果 |
+|---|---|
+| 暂存区构成（推送前） | **110 additions / 0 deletions**；`git ls-files` 无 `digital_body|temp/|mcp_records|totalseg_weights|Full_Win|.trial_anchor|.opencode|.dbg|deepseek_config|pacs_nodes|*.zip` |
+| 体积 | 本地 111 文件 / **5.99 MB**，无单文件 >2 MB；远端 108 blob / **5.96 MB**（`truncated=false`） |
+| LICENSE 保全 | `git checkout origin/main -- LICENSE` 后 0 删除；远端根目录 38 项，LICENSE 在列 |
+| 仓库 About | `description`（中文）、`homepage`、topics = `deepseek, dicom, mcp, medical-imaging, mpr, pacs, pyside6, python, qt6, sam-med3d, veterinary, volume-rendering, vtk` |
+| Release | `gh release list` → `v1.0.0 — Animal Dicom 爱宠影像工作站  Latest  v1.0.0  2026-09-25T16:36Z`；`isDraft=false, isPrerelease=false`；`targetCommitish=main` |
+| tag 一致性 | 本地 tag = 本地 HEAD = 远端 tag = **`4d8fe6f`** |
+| 工作区 | 仅 `?? .github/`（3 个流水线文件保留在本地、未跟踪），其余干净 |
+
+URL：
+- 仓库 <https://github.com/hg3992260/Animal_Dicom>
+- Release <https://github.com/hg3992260/Animal_Dicom/releases/tag/v1.0.0>
+
+## 7. 遗留问题与待办
+
+- [ ] **`.github/workflows/` 未入库**：推送被 GitHub 拒绝——
+      `refusing to allow an OAuth App to create or update workflow ... without 'workflow' scope`。
+      处理：`gh auth refresh -h github.com -s workflow` 后 `git add .github/workflows && git commit && git push`
+      （文件现在就在本地工作区，未被删除）。
+- [ ] **Release 未附构建产物**：基础版 EXE/DMG 建议由 Actions 产出后作为资产上传；
+      5.9 GB 的 onedir+zip 不能作为单个 release 资产（GitHub 上限 2 GB/资产）。
+- [ ] **许可与期限的张力**（重要）：仓库是 **MIT**（可自由修改/再分发），而分发产物带 30 天强制期限——
+      任何拿到源码的人都能自行去掉期限逻辑。若要"产物真正有期限"，应改为私有分发 + 服务端许可证，或换非开源许可。
+- [ ] 4 个提交的 subject 带 UTF-8 BOM（`Set-Content -Encoding UTF8` 在 PS 5.1 下写 BOM 所致），仅影响观感。
+- [ ] `scientific.json` / `render_templates.json` 代码零引用；`sam_adapter.py`、`synthseg_detector.py` 带 UTF-8 BOM。
+
+## 8. 错误记录
+
+| 时间 | 级别 | 来源 | 描述 | 解决状态 |
+|------|------|------|------|---------|
+| - | error | 推送 | `refusing to allow an OAuth App to create or update workflow`（令牌缺 `workflow` scope） | ✅ 改为暂不纳入 `.github/workflows` 并新提交；文件保留本地 |
+| - | warn | 提交 | PowerShell 不支持 heredoc（`<<'MSG'`）→ 提交信息被当命令解析 | ✅ 改为写文件 + `git commit -F` |
+| - | warn | 提交 | 临时文件 `.gh_about.json` 误入库 | ✅ `git rm --cached` + 删除 + 推送，并重建 release 指向新 HEAD |
+| - | warn | 文档 | README 误写"无开源许可证"，而仓库实为 MIT | ✅ 更正 README/CHANGELOG 并重建 release（tag 重指 `4d8fe6f`） |
+
+---
+
+## 历史轮次
+<details>
+<summary>Round R-37 — 2026-09-26 | 30 天强制运行期限 (license_guard.py) 点击展开</summary>
+
+# 项目交接文档 — SSD+VR Viewer (animal_dicom)
+
 > 轮次: Round 37 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: 30 天强制运行期限
 
 ---
@@ -3943,6 +4225,10 @@ good/
 （详见旧文档全文，含：解剖标注修正 HFS 体位、字典序排序陷阱、SimpleITK 多文件夹混读、vtkPNGWriter 故障、SSD+VR 体渲染管线参数等）
 
 </details>
+</details>
+
+</details>
+
 </details>
 
 </details>
