@@ -87,7 +87,31 @@
 
 （`docs/images/ui-*.png`、`mode-*.jpg` 是原版 SSD+VR 的渲染模式示意，仍适用于渲染页的 12 种模式。）
 
-## 快速开始（源码运行）
+## 下载即用（预编译产物）
+
+**Windows 64 位 · 便携免安装**：从 [Releases](https://github.com/hg3992260/Animal_Dicom/releases/tag/v1.0.0) 下载
+
+| 资产 | 大小 | 说明 |
+|---|---|---|
+| `Animal_Dicom_v1.0.0_win64_portable.zip` | ~424 MB | 解压后双击 `Animal_Dicom.exe`；含 `_internal/`（不可只拷 exe） |
+
+包内 `README-FIRST.txt` 是给使用者的快速说明（运行方式、五页签、MCP 开关、期限、常见问题）。
+
+**这是"基础版"**（为控制体积到可上传的 424 MB）：
+
+| 内容 | 状态 |
+|---|---|
+| 12 种渲染模式 / SSD+VR 融合 / MPR 阅片 / 测量 / 窗宽窗位 | ✅ 完整 |
+| PACS 取片 / 档案中心 / DeepSeek AI / 30 天期限 | ✅ 完整 |
+| ErCore.dll（CR 路径追踪所需） | ✅ 已附带（无 NVIDIA 显卡时相关模式自动回退） |
+| GPU 加速 `cupy` + CUDA 运行时（约 1.9 GB） | ❌ 未含 → Frangi 等走 CPU，明显更慢 |
+| 3D SAM 推理依赖 `torch`/`medim`（约 4.5 GB） | ❌ 未含 → 该页的分割按钮不可用 |
+
+> 需要完整能力（GPU Frangi + 3D SAM）时请用源码安装 `requirements-full.txt`，
+> 或参考 `animal_dicom.spec` 自行重打包（去掉 excludes 里的 cupy/torch 即可）。
+> 启动异常会写 `startup_error.log` 到 exe 同目录，便于反馈问题。
+
+
 
 ```bash
 # 1) 环境：Python 3.11+（Windows 10/11 为第一目标平台）
@@ -180,13 +204,15 @@ python ssd_vr_viewer.py --mcp                 # 默认端口 7799（被占则自
 
 | 方式 | 命令 / 位置 |
 |---|---|
-| Windows EXE（PyInstaller） | `pyinstaller build.yaml`（`app.version` = 1.0.0；已含皮肤/模板/期限模块） |
+| Windows EXE（**推荐**，onedir 便携包） | `pyinstaller --clean --noconfirm animal_dicom.spec` → `dist_animal/Animal_Dicom/` |
+| Windows EXE（按 build.yaml） | `pyinstaller build.yaml`（`app.version` = 1.0.0；已含皮肤/模板/期限模块） |
 | Windows 完整版（含 CUDA 依赖） | GitHub Actions `main-full.yml` |
 | macOS `.app` / DMG | `pyinstaller --clean ssd_vr_viewer_macos.spec`，或 Actions `macos.yml` |
 
 > 打包**必须**带上 `license_guard`（否则启动即报"完整性检查失败"）与
-> `retro.qss / light.qss / warm_orange.json / case_template.json`（否则丢皮肤与病例模板）。
-> 详见 [DEPENDENCIES.md §6](DEPENDENCIES.md)。
+> `retro.qss / light.qss / warm_orange.json / case_template.json`（否则丢皮肤与病例模板）；
+> **PyCt6 必须连数据文件一起收集**（`widgets/themes/*.json`、`windows/images/*.png`），
+> 否则 `set_color_theme()` 启动即 `FileNotFoundError`。详见 [DEPENDENCIES.md](DEPENDENCIES.md) §6/§7。
 
 ## 目录结构
 

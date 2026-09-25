@@ -94,7 +94,11 @@ class BridgeClient:
         if self._sock is None:
             return False, {"error": "bridge not connected"}
         req_id = uuid.uuid4().hex[:12]
-        payload = json.dumps({"id": req_id, "op": op, "args": args or {}}, ensure_ascii=False)
+        # timeout 必须一起发给桥：桥侧默认只等 120s（gui_bridge._handle_request），
+        # 而某些 op（如切到 frangi_channel 会触发整段重预处理）远超 120s，
+        # 不带上就会必然"主线程执行超时"。桥协议本来就支持该字段。
+        payload = json.dumps({"id": req_id, "op": op, "args": args or {},
+                              "timeout": float(timeout)}, ensure_ascii=False)
         evt = threading.Event()
         with self._lock:
             self._pending[req_id] = {"id": req_id, "evt": evt, "result": None}

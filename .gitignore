@@ -13,6 +13,8 @@ ckpt/
 # Build artifacts
 build/
 dist/
+build_animal/
+dist_animal/
 *.egg-info/
 *.dll
 !exposure-render-master/**/ErCore.dll

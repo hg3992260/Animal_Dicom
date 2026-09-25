@@ -166,3 +166,37 @@ GUI（`ssd_vr_viewer.py`）在本版本中**不再 import** 它们：
 > SimpleITK + pydicom + pynetdicom + scikit-image + Pillow + matplotlib + openpyxl。
 > **分割版**再加 torch + medim + torchio（3D SAM）。
 > 其余（TotalSegmentator / nnunetv2 / dipy）是已移除功能的遗留依赖。
+
+---
+
+## 8. 冻结版（EXE）打包实录 · `animal_dicom.spec`
+
+Release 资产 `Animal_Dicom_v1.0.0_win64_portable.zip`（**424 MB**，解压后 onedir **1.16 GB**）
+由 `pyinstaller --clean --noconfirm animal_dicom.spec` 产出。踩过的坑与取舍：
+
+| 事项 | 数据 | 处理 |
+|---|---|---|
+| 初版 onedir 体积 | **3.63 GB** | 超出"可上传"预期 |
+| ↳ 其中 CUDA 运行时 | ~1.9 GB（`cublasLt64_12.dll` 660 MB、`cusparse64_12.dll` 367 MB…因含 cupy 被整链拉入） | **排除 `cupy/cupyx/nvidia`** → Frangi 走 CPU 回退（既有降级路径） |
+| ↳ 其中 QtWebEngine | ~270 MB（`Qt6WebEngineCore.dll` 195 MB + 调试资源） | 在 Analysis 后按名过滤（注意要匹配 `qt6webengine`，`qtwebengine` 匹配不到） |
+| ↳ 其中 torch | 4.5 GB | 排除（3D SAM 属完整版；`segmentation` **不能**用 `collect_submodules`，会拉进 import torch 的检测器） |
+| 环境里同时装了 PyQt5 | PyInstaller 直接 `Aborting build process`（不允许混用 Qt 绑定） | excludes 加 `PyQt5/PyQt6/PySide2` 与 matplotlib 的 qt 后端 |
+| **PyCt6 数据文件缺失**（首次冻结版启动即崩） | 现象：窗口标题 `Unhandled exception in script`、无桥、无锚点文件；日志里只有 `set_color_theme` 前的路径 | 根因：PyCt6 是纯 Python 包但**带 `widgets/themes/*.json`、`windows/images/logo.png`**，只写 hiddenimports 只收 .py → 必须 `collect_all('PyCt6')` |
+| `--noconsole` 下看不到异常 | 用户只能看到 PyInstaller 弹窗 | 在 `__main__` 包一层 try/except，写 `startup_error.log` 到 exe 同目录 |
+| 冻结版期限锚点 | `__file__` 指向一次性解包目录 | `license_guard._app_dir()` 在 `sys.frozen` 下改用 `sys.executable` 目录 |
+| 构建清理失败 | `PermissionError: 拒绝访问 dist…Animal_Dicom.exe` | 上次冒烟测试的 EXE 进程未退出，文件被占用 → 先杀进程再构建 |
+
+**冻结版冒烟结果（12/12 通过）**：桥就绪、`license_guard` 随包（trial ok / 剩余 29.94 天）、
+5 页签与右区显隐、加载 176 层 CT、`stable`/`cinematic`/`dual_volume` 渲染截图
+（6056 / 28567 / 1447 色）、设置与档案可读、整窗截图、正常退出 rc=0。
+
+**基础版 vs 完整版**
+
+| | 基础版（本 Release 资产） | 完整版（源码 / `main-full.yml`） |
+|---|---|---|
+| 渲染 12 模式 / MPR / 测量 / 窗宽窗位 | ✅ | ✅ |
+| PACS / 档案 / AI / 期限 | ✅ | ✅ |
+| GPU Frangi（cupy + CUDA 运行时） | ❌ CPU 回退（较慢） | ✅ |
+| 3D SAM（torch + medim + 权重 383 MB） | ❌ | ✅ |
+| 体积 | 424 MB（zip）/ 1.16 GB（解压） | ~5.9 GB（onedir） |
+

@@ -8785,4 +8785,28 @@ if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
 
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except BaseException:
+        # 冻结版是 --noconsole 窗口程序：启动期异常会变成 PyInstaller 的
+        # "Unhandled exception in script" 弹窗，用户拿不到任何可读信息。
+        # 这里落一份 startup_error.log 到程序目录，便于定位与反馈。
+        import traceback
+        _tb = traceback.format_exc()
+        try:
+            _base = (os.path.dirname(os.path.abspath(sys.executable))
+                     if getattr(sys, "frozen", False)
+                     else os.path.dirname(os.path.abspath(__file__)))
+            with open(os.path.join(_base, "startup_error.log"), "w", encoding="utf-8") as _f:
+                _f.write("[%s] 启动失败 (frozen=%s)\n%s"
+                         % (time.strftime("%Y-%m-%d %H:%M:%S"),
+                            bool(getattr(sys, "frozen", False)), _tb))
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            sys.stderr.write(_tb)
+        except Exception:  # noqa: BLE001
+            pass
+        sys.exit(5)

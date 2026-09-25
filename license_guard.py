@@ -54,6 +54,13 @@ def _now() -> float:
 
 
 def _app_dir() -> str:
+    """程序目录（锚点落盘位置之一）。
+
+    PyInstaller 冻结版里 `__file__` 指向运行时解包目录（每次启动都会被清掉），
+    所以必须用 `sys.executable` 的目录，锚点才能跨启动保留。
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
 
 

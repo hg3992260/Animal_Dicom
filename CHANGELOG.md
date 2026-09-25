@@ -45,6 +45,8 @@
 | `load_dicom` 每次加载向 `127.0.0.1:7777` POST 几何快照 | 离线程序里的隐藏上报 → 改为 `SSDVR_DEBUG_TELEMETRY=1` 才启用 |
 | 桥在 GUI 弹模态框时整体卡死（删除确认 / 无 mask 提示等） | op 超时 → 新增 `_NoDialogs` 统一兜底 |
 | 桥的 `ok` 只反映"传输成功"，op 级参数校验失败被记成成功 | 记录/上报失真 → `call()` 合并为有效 ok |
+| **桥未把 op 超时发给 GUI**（客户端超时形同虚设，桥侧恒为 120s） | 切 `frangi_channel` 等重预处理模式（实测 405 s）必然报"主线程执行超时" → 已在 `bridge_client.call` 带上 `timeout` |
+| **冻结版缺 PyCt6 数据文件**（`widgets/themes/*.json` 等） | `set_color_theme()` 抛 `FileNotFoundError`，EXE 启动即 "Unhandled exception in script"，且 `--noconsole` 下用户看不到原因 → 已修 spec，并新增启动崩溃日志 `startup_error.log` |
 | 右侧渲染区在隐藏页截图是空白（VTK 窗仅 400×38） | 新增 `vtk_visible`/`hint` 与 `switch_to_render` |
 | 爱宠列表 / 设置页右侧保留渲染区 | 按需求改为占满整窗（并修复首屏不生效：首个页签不触发 `currentChanged`） |
 
@@ -55,6 +57,14 @@
   以及 `retro.qss`/`light.qss`/`warm_orange.json`/`case_template.json`/`render_templates.json` 数据文件
   （此前冻结版会丢皮肤与病例模板，并因缺 `license_guard` 直接拒绝启动）。
 - `build.yaml` 版本号与产品名对齐 1.0.0 / Animal_Dicom。
+- **新增 `animal_dicom.spec`**：Windows onedir 便携包（Release 资产
+  `Animal_Dicom_v1.0.0_win64_portable.zip`，424 MB）：
+  - 排除 `torch/medim/torchio/dipy/monai/totalseg`（约 4.5 GB）与 CUDA 运行时
+    `cupy/nvidia`（约 1.9 GB）→ 体积 3.63 GB → 1.16 GB；
+  - 过滤未使用的 `QtWebEngine/QtQuick`（约 270 MB）；
+  - **PyCt6 连数据文件一起收集**（`widgets/themes/*.json` 等），否则启动即崩。
+- 冻结版适配：`license_guard._app_dir()` 在 `sys.frozen` 下改用 `sys.executable` 目录，
+  期限锚点不再写进一次性解包目录。
 
 ### 已知问题
 
