@@ -1,0 +1,142 @@
+name: Build SSD+VR for macOS (DMG + App)
+
+# Qt 只能有一个来源（2026-09-17 两次崩溃的教训，详见 ssd_vr_viewer_macos.spec 顶部）:
+#   ① pip PySide6 + conda vtk 混装 → 裸 dylib Qt 与 framework Qt 两套 → 插件找不到库(SIGABRT)
+#   ② 只"不删 Qt" 还不够 → 三套 Qt 同时进包 → ObjC 类重复注册 → 随机 EXC_BAD_ACCESS
+# 因此：Qt 统一到 conda-forge（vtk 与 pyside6 同源同版），PyCt6 必须 --no-deps 安装，
+# 并在构建前 / 构建后各有一道门禁。
+
+on:
+  push:
+    branches: [main, master]
+    # tag 也要触发，否则那些 if: refs/tags/v 的 Release 步骤永远不会执行
+    tags: ['v*']
+    # 文档改动不必重新打包（否则一个 README 提交就会产出 DMG + .app 两个产物）
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.10"
+          channels: conda-forge,defaults
+
+      - name: "Install deps (single Qt source: conda-forge)"
+        shell: bash -el {0}
+        run: |
+          set -euo pipefail
+          conda install -y -c conda-forge numpy scipy matplotlib vtk pyside6
+          # PyCt6 的元数据写着 Requires-Dist: PySide6。不加 --no-deps 时 pip 会把
+          # framework 版 PySide6 wheel 再拉回来，白修 —— 这一步是统一 Qt 的关键。
+          pip install --no-deps PyCt6
+          pip install nibabel scikit-image SimpleITK pyinstaller
+          brew install create-dmg
+
+      - name: "Assert a single Qt distribution (fail fast before building)"
+        shell: bash -el {0}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, pathlib, sys
+          import PySide6
+
+          root = pathlib.Path(PySide6.__path__[0])
+          meta = pathlib.Path(os.environ.get("CONDA_PREFIX", "")) / "conda-meta"
+          has_pyside6 = bool(list(meta.glob("pyside6-*.json"))) if meta.is_dir() else False
+          has_qt = bool(list(meta.glob("qt6-*.json"))) if meta.is_dir() else False
+          fw = list(root.rglob("Qt*.framework"))
+
+          print(f"PySide6 路径    : {root}")
+          print(f"conda-meta pyside6: {has_pyside6}")
+          print(f"conda-meta qt6-*  : {has_qt}")
+          print(f"wheel framework   : {len(fw)}")
+
+          # 注意：conda 装的包也会出现在 `pip list` 里，所以**不能**用 pip list 判断来源。
+          # 唯一可靠的证据是 conda-meta 记录 + 包里有没有 framework。
+          problems = []
+          if not has_pyside6:
+              problems.append("conda-meta 里没有 pyside6 → PySide6 来自 pip wheel，会与 conda Qt 混装")
+          if not has_qt:
+              problems.append("conda-meta 里没有 qt6-* → conda 侧 Qt 不完整")
+          if fw:
+              problems.append(f"PySide6 内含 Qt framework（wheel 特征）: {[str(p) for p in fw[:2]]}")
+          if problems:
+              for p in problems:
+                  print(f"::error::{p}")
+              sys.exit("Qt 来源不唯一，见上面的 ::error:: 行")
+          print("OK: 环境里只有 conda-forge 的一份 Qt")
+          PY
+          echo "--- conda Qt（裸 dylib）---"
+          ls "$CONDA_PREFIX/lib" | grep -E '^libQt6(Core|Gui|Widgets)' || true
+          echo "--- Qt 运行时版本 ---"
+          python -c "from PySide6.QtCore import qVersion, __version__; print('Qt', qVersion(), '| PySide6', __version__)"
+
+      - name: Build .app from spec
+        shell: bash -el {0}
+        run: pyinstaller --clean ssd_vr_viewer_macos.spec
+
+      - name: "Verify bundle (fail fast: single Qt + dependency closure + launch smoke)"
+        shell: bash -el {0}
+        run: bash tools/verify_macos_bundle.sh "dist/SSD_VR_Fusion_Viewer.app"
+
+      - name: Cross-check with pure-python Mach-O scanner
+        shell: bash -el {0}
+        run: python tools/macho_bundle_check.py "dist/SSD_VR_Fusion_Viewer.app"
+
+      - name: Package DMG
+        run: |
+          create-dmg \
+            --volname "SSD_VR_Fusion_Viewer" \
+            --volicon "logo.icns" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 400 150 \
+            "dist/SSD_VR_Fusion_Viewer.dmg" \
+            "dist/SSD_VR_Fusion_Viewer.app"
+
+      - name: Inspect DMG contents (sanity)
+        run: |
+          set -euo pipefail
+          hdiutil attach "dist/SSD_VR_Fusion_Viewer.dmg" -nobrowse -mountpoint /tmp/dmgmnt
+          APP_IN_DMG=$(find /tmp/dmgmnt -maxdepth 1 -name '*.app' | head -n 1)
+          echo "app in dmg: $APP_IN_DMG"
+          echo "--- Qt 库 ---"; find "$APP_IN_DMG" -name 'libQt6*.dylib' -type f | sed 's/^/  /' | head -20
+          echo "--- framework（应为空）---"; find "$APP_IN_DMG" -name 'Qt*.framework' -type d | head -5
+          echo "--- cocoa 插件 ---"; find "$APP_IN_DMG" -name 'libqcocoa.dylib' -type f
+          hdiutil detach /tmp/dmgmnt
+
+      - name: Upload DMG
+        # tag 运行时跳过 artifact（Release 资产是另一套配额；产物配额满了会连带掐死 Release 步骤）
+        if: github.ref_type == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSD_VR_Fusion_Viewer_macOS
+          path: dist/SSD_VR_Fusion_Viewer.dmg
+          retention-days: 3
+
+      # .app 有 700+ MB，日常推送不再上传（DMG 里已包含）；分支上手动触发时才产出
+      - name: Upload .app (manual dispatch on a branch only)
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSD_VR_Fusion_Viewer_app
+          path: dist/SSD_VR_Fusion_Viewer.app
+          include-hidden-files: true
+          retention-days: 3
+
+      - name: Release (tag only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SSD_VR_Fusion_Viewer.dmg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
