@@ -1,0 +1,36 @@
+# Core
+PySide6>=6.5.0
+vtk>=9.2.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Medical imaging
+SimpleITK>=2.2.0
+nibabel>=5.0.0
+
+# PACS / DICOM 网络（C-ECHO / C-FIND / C-GET）
+pynetdicom>=2.0.0
+pydicom>=2.3.0
+
+# Segmentation engine
+TotalSegmentator>=2.16.0
+nnunetv2>=2.8.0
+# dipy 需 Python>=3.11 且有 trx-python 依赖，CI(py3.10) 与基础版不装；
+# SynthSeg 可选项 → 在 py3.11+ 环境单独: pip install dipy
+
+# Image processing
+scikit-image>=0.20.0
+matplotlib>=3.7.0
+Pillow>=10.0.0          # PyInstaller --icon 需转 .ico，截图亦用
+openpyxl>=3.1.0         # 「已保存 ROI → 一键导出 Excel」(_sam_export_roi_excel)
+
+# GUI theme
+PyCt6>=6.1.0
+
+# GPU (optional)
+cupy-cuda12x>=12.0.0
+
+# ---------------------------------------------------------------
+# 可选：让 AI Agent 通过 MCP 驱动本程序时才需要（GUI 本身不依赖）
+#   pip install fastmcp
+# ---------------------------------------------------------------

@@ -1,0 +1,121 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# TotalSegmentator weights — 1.5 GB, download separately
+totalseg_weights/
+*.pth
+*.pt
+ckpt/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.dll
+!exposure-render-master/**/ErCore.dll
+*.exe
+*.so
+*.o
+*.spec
+
+# Dependencies
+pv_packages/
+python-3.12.7-embed-amd64/
+
+# Vendored frameworks (installed via pip)
+frame/
+
+# External renderers (optional)
+exposure-render-master/
+MC_RDenoiser-main/
+
+# Patient data (DICOM)
+18/
+20/
+S0008/
+S0010/
+good/
+
+# Large assets
+projects/
+documentation/
+dummy_dicom/
+temp/
+tests/
+key-paper/
+SSD_VR_Fusion_Viewer/
+
+# Generated output
+kedge_output/
+*.jsonl
+*.npz
+SSD_VR_Fusion_Viewer.zip
+
+# Temp download/test scripts
+dl.py
+download_ts_weights.py
+download_zenodo.py
+extract2.py
+extract_html.py
+test_*.py
+session-dashboard.html
+debug-*.md
+*.nii.gz
+*.nii
+*.npy
+*.mha
+*.mhd
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PACS 节点配置 / 取片缓存（本机私有）
+pacs_nodes.json
+pacs_downloads/
+
+# DeepSeek API Key（本机私有，切勿提交）
+deepseek_config.json
+
+# ============================================================
+# Animal_Dicom v1.0.0 追加：本机私有数据 / 超大目录 / 运行期产物
+# ============================================================
+
+# 数据集与超大目录（合计 >110 GB，绝不入库）
+digital_body/
+SSD_VR_Fusion_Viewer_Full_Win/
+*.zip
+*.tar.gz
+*.7z
+
+# 运行期记录（含病例档案/ROI 统计/截图/SQLite/事件 JSONL）
+# 其中 .trial_anchor.json 是**本机**运行期限锚点，入库会污染其他机器
+mcp_records/
+
+# 本机私有：AI Agent 配置与调试上报环境
+.opencode/
+.dbg/
+
+# 运行期限锚点（本机，勿提交）
+.trial_anchor.json
+
+# 诊断/临时产物
+crash*.txt
+crash_report.txt
+*.docx
+*.bak_*
+ssd_vr_viewer.py.bak*
+.assemble*.py
+Translated Report*.docx
+tools/screenshots/output/
+

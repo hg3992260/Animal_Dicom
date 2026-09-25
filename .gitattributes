@@ -1,0 +1,26 @@
+# 统一换行策略：源文件入库用 LF（Windows/macOS/Linux 一致，避免 CRLF 抖动）
+* text=auto eol=lf
+
+# 明确二进制（防止 Git 误判为文本而改动字节）
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.ico    binary
+*.icns   binary
+*.dll    binary
+*.npy    binary
+*.npz    binary
+*.pth    binary
+*.zip    binary
+*.docx   binary
+
+# 文本类资源（皮肤/预设/模板对空白敏感，固定 LF）
+*.py     text eol=lf
+*.md     text eol=lf
+*.qss    text eol=lf
+*.xml    text eol=lf
+*.json   text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.spec   text eol=lf
+*.txt    text eol=lf

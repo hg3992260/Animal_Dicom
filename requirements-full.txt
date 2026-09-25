@@ -1,0 +1,15 @@
+# ============================================================
+# 完整版依赖（GPU 加速 + 3D SAM / SAM-Med3D）
+# 用法:
+#   1) 先装 CUDA 版 PyTorch（必须用 --index-url，否则会装成 CPU 版）:
+#        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+#   2) 再装本文件:
+#        pip install -r requirements-full.txt
+#   3) 首次运行 3D SAM 自动下载权重 (~383MB)，或先跑: python download_sam_med3d.py
+# 说明: torch 不写在本文件内（避免被 PyPI 的 CPU 轮子覆盖）。
+# ============================================================
+-r requirements.txt
+
+# 3D SAM (SAM-Med3D) 运行时
+medim>=0.1.2
+torchio>=0.18.0

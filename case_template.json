@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "title": "宠物影像病例档案模板",
+  "sections": [
+    {
+      "name": "① 动物与主人 (Signalment)",
+      "fields": [
+        {
+          "key": "case_no",
+          "label": "病例号",
+          "type": "text"
+        },
+        {
+          "key": "owner",
+          "label": "主人 / 电话",
+          "type": "text"
+        },
+        {
+          "key": "species",
+          "label": "物种（犬/猫/…）",
+          "type": "text"
+        },
+        {
+          "key": "breed",
+          "label": "品种",
+          "type": "text"
+        },
+        {
+          "key": "sex",
+          "label": "性别 / 绝育",
+          "type": "text"
+        },
+        {
+          "key": "age",
+          "label": "年龄",
+          "type": "text"
+        },
+        {
+          "key": "weight",
+          "label": "体重 (kg)",
+          "type": "text"
+        },
+        {
+          "key": "date",
+          "label": "就诊日期",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "② 病史 (Subjective)",
+      "fields": [
+        {
+          "key": "cc",
+          "label": "主诉",
+          "type": "multi"
+        },
+        {
+          "key": "history",
+          "label": "现病史 / 既往史",
+          "type": "multi"
+        },
+        {
+          "key": "meds",
+          "label": "用药 / 疫苗 / 驱虫",
+          "type": "multi"
+        }
+      ]
+    },
+    {
+      "name": "③ 体格检查 (Objective)",
+      "fields": [
+        {
+          "key": "pe_vitals",
+          "label": "T / P / R / 黏膜 / BCS",
+          "type": "text"
+        },
+        {
+          "key": "pe_exam",
+          "label": "系统检查所见",
+          "type": "multi"
+        }
+      ]
+    },
+    {
+      "name": "④ 影像检查 (Imaging)",
+      "fields": [
+        {
+          "key": "modality",
+          "label": "检查类型（CT/DR/MRI）",
+          "type": "text"
+        },
+        {
+          "key": "region",
+          "label": "检查部位",
+          "type": "text"
+        },
+        {
+          "key": "contrast",
+          "label": "对比剂（种类/剂量/途径）",
+          "type": "text"
+        },
+        {
+          "key": "anesthesia",
+          "label": "麻醉 / 镇静方案",
+          "type": "text"
+        },
+        {
+          "key": "technique",
+          "label": "扫描与重建参数",
+          "type": "text"
+        },
+        {
+          "key": "findings",
+          "label": "影像所见",
+          "type": "multi"
+        }
+      ]
+    },
+    {
+      "name": "⑤ 评估与计划 (Assessment / Plan)",
+      "fields": [
+        {
+          "key": "assessment",
+          "label": "评估 / 鉴别诊断",
+          "type": "multi"
+        },
+        {
+          "key": "diagnosis",
+          "label": "诊断",
+          "type": "multi"
+        },
+        {
+          "key": "incidental",
+          "label": "偶然发现",
+          "type": "multi"
+        },
+        {
+          "key": "recommend",
+          "label": "建议 / 随访",
+          "type": "multi"
+        },
+        {
+          "key": "vet",
+          "label": "医师 / 签名",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

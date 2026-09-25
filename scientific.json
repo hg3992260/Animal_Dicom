@@ -1,0 +1,83 @@
+{
+  "CButton": {
+    "corner_radius": 4,
+    "border_width": 1,
+    "background_color": ["rgb(60,22,34)", "rgb(68,28,40)"],
+    "text_color": ["rgb(228,216,222)", "rgb(232,222,228)"],
+    "border_color": ["rgb(80,34,48)", "rgb(90,44,58)"],
+    "hover_color": ["rgb(74,30,44)", "rgb(82,36,50)"],
+    "pressed_color": ["rgb(50,18,28)", "rgb(56,22,32)"],
+    "disabled_background_color": ["rgba(60,22,34,0.45)", "rgba(68,28,40,0.45)"],
+    "disabled_text_color": ["rgba(228,216,222,0.4)", "rgba(232,222,228,0.4)"]
+  },
+  "CComboBox": {
+    "corner_radius": 4,
+    "border_width": 1,
+    "menu_border_width": 1,
+    "item_border_width": 0,
+    "background_color": ["rgb(50,18,28)", "rgb(58,24,34)"],
+    "text_color": ["rgb(224,212,218)", "rgb(230,220,226)"],
+    "border_color": ["rgb(78,32,46)", "rgb(88,42,56)"],
+    "hover_color": ["rgb(64,26,36)", "rgb(72,32,42)"],
+    "menu_background_color": ["rgb(46,16,24)", "rgb(54,22,32)"],
+    "menu_border_color": ["rgb(74,30,42)", "rgb(84,40,52)"],
+    "item_text_color": ["rgb(220,208,214)", "rgb(226,216,222)"],
+    "item_background_color": ["rgb(50,18,28)", "rgb(58,24,34)"],
+    "item_border_color": ["rgb(70,28,40)", "rgb(80,38,50)"],
+    "item_hover_color": ["rgb(74,32,44)", "rgb(84,40,52)"],
+    "disabled_background_color": ["rgba(50,18,28,0.45)", "rgba(58,24,34,0.45)"],
+    "disabled_text_color": ["rgba(224,212,218,0.4)", "rgba(230,220,226,0.4)"]
+  },
+  "CFrame": {
+    "corner_radius": 4,
+    "border_width": 1,
+    "background_color": ["rgb(26,10,16)", "rgb(32,14,22)"],
+    "border_color": ["rgb(60,26,38)", "rgb(70,36,48)"]
+  },
+  "CLabel": {
+    "corner_radius": 0,
+    "border_width": 0,
+    "text_color": ["rgb(235,226,230)", "rgb(240,232,236)"],
+    "disabled_text_color": ["rgba(235,226,230,0.35)", "rgba(240,232,236,0.35)"]
+  },
+  "CLineEdit": {
+    "corner_radius": 4,
+    "border_width": 1,
+    "background_color": ["rgb(46,16,24)", "rgb(54,22,32)"],
+    "text_color": ["rgb(226,216,222)", "rgb(232,224,228)"],
+    "placeholder_text_color": ["rgb(130,100,110)", "rgb(140,110,120)"],
+    "border_color": ["rgb(74,30,42)", "rgb(84,40,52)"],
+    "disabled_background_color": ["rgba(46,16,24,0.4)", "rgba(54,22,32,0.4)"],
+    "disabled_text_color": ["rgba(226,216,222,0.35)", "rgba(232,224,228,0.35)"]
+  },
+  "CScrollBar": {
+    "background_color": ["rgb(60,24,34)", "rgb(68,30,40)"],
+    "hover_color": ["rgb(76,34,46)", "rgb(84,40,52)"],
+    "pressed_color": ["rgb(64,28,38)", "rgb(70,34,44)"]
+  },
+  "CSlider": {
+    "corner_radius": 3,
+    "border_width": 1,
+    "button_border_width": 1,
+    "button_corner_radius": 4,
+    "background_color": ["rgb(54,22,32)", "rgb(60,26,36)"],
+    "progress_color": ["rgb(170,60,78)", "rgb(184,70,88)"],
+    "border_color": ["rgb(78,34,46)", "rgb(86,42,54)"],
+    "button_background_color": ["rgb(210,180,188)", "rgb(220,190,198)"],
+    "button_border_color": ["rgb(130,80,90)", "rgb(140,90,100)"],
+    "button_hover_color": ["rgb(225,195,202)", "rgb(232,205,212)"],
+    "button_pressed_color": ["rgb(190,160,168)", "rgb(200,170,178)"],
+    "disabled_background_color": ["rgba(54,22,32,0.4)", "rgba(60,26,36,0.4)"],
+    "disabled_button_background_color": ["rgba(210,180,188,0.35)", "rgba(220,190,198,0.35)"]
+  },
+  "CTextEdit": {
+    "corner_radius": 4,
+    "border_width": 1,
+    "background_color": ["rgb(42,14,22)", "rgb(50,20,28)"],
+    "text_color": ["rgb(220,210,216)", "rgb(226,218,224)"],
+    "placeholder_text_color": ["rgb(120,92,100)", "rgb(130,102,110)"],
+    "border_color": ["rgb(72,28,40)", "rgb(82,38,50)"],
+    "disabled_background_color": ["rgba(42,14,22,0.4)", "rgba(50,20,28,0.4)"],
+    "disabled_text_color": ["rgba(220,210,216,0.35)", "rgba(226,218,224,0.35)"]
+  }
+}

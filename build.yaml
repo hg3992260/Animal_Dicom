@@ -1,0 +1,261 @@
+# ============================================================
+# SSD+VR Fusion Viewer — 独立 EXE 编译配置
+# 工具: PyInstaller 6.x
+# 命令: pyinstaller build.yaml
+# 或手动: pyinstaller --distpath=./dist --workpath=./build ssd_vr_viewer.spec
+# ============================================================
+
+app:
+  name: Animal_Dicom
+  entry_point: ssd_vr_viewer.py
+  version: "1.0.0"
+  console: false
+  icon: logo.ico
+
+# ============================================================
+# 数据文件 (随 EXE 一起打包)
+# 注: 皮肤优先级 retro > light > dark；主题 warm_orange.json；病例模板 case_template.json
+#     —— 缺任何一个都会静默回退（皮肤变深色 / 模板用内置默认），打包时必须带上。
+# ============================================================
+datas:
+  - { source: scientific.json,     dest: "." }
+  - { source: dark.qss,            dest: "." }
+  - { source: light.qss,           dest: "." }
+  - { source: retro.qss,           dest: "." }
+  - { source: warm_orange.json,    dest: "." }
+  - { source: case_template.json,  dest: "." }
+  - { source: presets.xml,         dest: "." }
+  - { source: render_templates.json, dest: "." }
+  - { source: logo.ico,            dest: "." }
+  - { source: logo.png,            dest: "." }
+  - { source: segmentation,        dest: "segmentation" }
+  - { source: mcp_ssd_vr,          dest: "mcp_ssd_vr" }
+
+# ============================================================
+# 二进制依赖 (DLL)
+# ============================================================
+binaries:
+  - { source: exposure-render-master/exposure-render-master/Source/build/Release/ErCore.dll,
+      dest: "." }
+
+# ============================================================
+# 隐式导入 (PyInstaller 可能遗漏的模块)
+# ============================================================
+hidden_imports:
+  # — PySide6 + PyCt6 —
+  - PySide6.QtCore
+  - PySide6.QtGui
+  - PySide6.QtWidgets
+  - PySide6.QtOpenGL
+  - PySide6.QtOpenGLWidgets
+  - PyCt6
+  - PyCt6.widgets.c_button
+  - PyCt6.widgets.c_label
+  - PyCt6.widgets.c_line_edit
+  - PyCt6.widgets.c_text_edit
+  - PyCt6.widgets.c_combo_box
+  - PyCt6.widgets.c_slider
+  - PyCt6.widgets.c_frame
+  - PyCt6.appearance.theme_manager
+  - PyCt6.appearance.mode_manager
+
+  # — VTK —
+  - vtk
+  - vtkmodules
+  - vtkmodules.qt
+  - vtkmodules.qt.QVTKRenderWindowInteractor
+  - vtkmodules.util.numpy_support
+  - vtkmodules.all
+  - vtkRenderingOpenGL2
+  - vtkRenderingVolumeOpenGL2
+  - vtkRenderingUI
+  - vtkInteractionStyle
+  - vtkFiltersSources
+  - vtkIOImage
+  - vtkImagingCore
+  - vtkRenderingCore
+  - vtkCommonCore
+  - vtkCommonDataModel
+  - vtkCommonExecutionModel
+  - vtkFiltersCore
+  - vtkFiltersGeneral
+  - vtkFiltersGeometry
+  - vtkFiltersHybrid
+
+  # — 科学计算 —
+  - numpy
+  - numpy.core._methods
+  - numpy.lib.format
+  - scipy
+  - scipy.ndimage
+  - scipy.ndimage._ni_support
+  - scipy.sparse.csgraph._validation
+  - scipy.special._ufuncs_cxx
+  - scipy.linalg.cython_blas
+  - scipy.linalg.cython_lapack
+
+  # — 医学影像 —
+  - SimpleITK
+  - nibabel
+  - nibabel.nifti1
+  - nibabel.nifti2
+
+  # — 项目内模块（ROI / MCP 桥 / 期限校验）—
+  # 注: 3D SAM(SAM-Med3D/medim) 与 SynthSeg(dipy) 依赖超大，
+  # 基础版不打包，见 build_full.yaml；运行时会给出友好提示。
+  - segmentation.roi_pipeline
+  - segmentation.roi_types
+  - segmentation.roi_label_map
+  - segmentation.detectors.semantic_detector
+  - license_guard
+  - deepseek_client
+  - mcp_ssd_vr.dicom
+  - mcp_ssd_vr.gui_bridge
+  - mcp_ssd_vr.bridge_client
+  - mcp_ssd_vr.bridge_registry
+  - mcp_ssd_vr.state
+  - mcp_ssd_vr.config
+  - mcp_ssd_vr.recorder
+  - mcp_ssd_vr.tools
+  - mcp_ssd_vr.tools.cases
+  - mcp_ssd_vr.tools.control
+  - mcp_ssd_vr.tools.inspect
+  - mcp_ssd_vr.tools.recording
+
+  # — 图像处理 —
+  - skimage
+  - skimage.restoration
+  - skimage.restoration._nl_means_denoising
+  - skimage.exposure
+  - skimage.filters
+  - skimage.filters.ridges
+
+  # — GPU加速 (可选) —
+  - cupy
+  - cupyx
+  - cupyx.scipy.ndimage
+
+  # — 数据格式 —
+  - xml.etree.ElementTree
+  - json
+  - tempfile
+
+  # — 其他 —
+  - matplotlib
+  - matplotlib.backends.backend_agg
+  - PIL
+  - openpyxl
+  - ctypes
+  - argparse
+
+# ============================================================
+# 收集钩子
+# ============================================================
+collects:
+  # PySide6 Qt plugins (platforms, imageformats, etc.)
+  - { name: PySide6,        submodules: [QtCore, QtGui, QtWidgets, QtOpenGL] }
+  # VTK 渲染模块
+  - { name: vtkmodules }
+
+# ============================================================
+# 排除模块 (减小体积)
+# ============================================================
+excludes:
+  - tkinter
+  - test
+  - pydoc
+  - email
+  - http
+  - html
+  - xmlrpc
+  - pdb
+  - distutils
+  - setuptools
+  - pip
+  # 注意: 不要排除 unittest —— scipy.ndimage→numpy.testing 运行期需要
+  # 3D SAM(SAM-Med3D/medim) 与 SynthSeg(dipy) 大依赖 → 基础版不打包 (build_full.yaml 提供完整版)
+  # 不排除 torch —— 自动ROI(TotalSegmentator) 运行时需要 torch。
+  - medim
+  - torchio
+  - dipy
+  - monai
+
+# ============================================================
+# CUDA / GPU 加速配置
+# ============================================================
+gpu:
+  cuda_version: ">=11.8"
+  cudnn_version: ">=8.6"
+  er_core_dll_path: "ErCore.dll"                  # CUDA 路径追踪引擎
+  cupy_available: true                            # CuPy GPU 加速 Frangi
+  vtk_gpu_volume_mapper: true                     # VTK GPU Ray Casting
+  nvidia_driver_required: ">=525"
+
+# ============================================================
+# 运行时环境变量
+# ============================================================
+runtime_env:
+  CUDA_VISIBLE_DEVICES: "0"
+  QT_QPA_PLATFORM: "windows"
+  QT_OPENGL: "desktop"
+
+# ============================================================
+# 编译命令
+# ============================================================
+build_command: >
+  pyinstaller
+    --name="Animal_Dicom"
+    --onefile
+    --noconsole
+    --runtime-hook="pyi_rth_vcruntime.py"
+    --add-data="scientific.json;."
+    --add-data="dark.qss;."
+    --add-data="light.qss;."
+    --add-data="retro.qss;."
+    --add-data="warm_orange.json;."
+    --add-data="case_template.json;."
+    --add-data="presets.xml;."
+    --add-data="render_templates.json;."
+    --add-data="logo.ico;."
+    --add-data="logo.png;."
+    --add-data="segmentation;segmentation"
+    --add-data="mcp_ssd_vr;mcp_ssd_vr"
+    --add-binary="exposure-render-master/exposure-render-master/Source/build/Release/ErCore.dll;."
+    --icon="logo.ico"
+    --collect-all=PySide6
+    --collect-all=vtkmodules
+    --collect-all=SimpleITK
+    --hidden-import=PyCt6
+    --hidden-import=vtkmodules.qt.QVTKRenderWindowInteractor
+    --hidden-import=vtkmodules.util.numpy_support
+    --hidden-import=scipy.ndimage
+    --hidden-import=skimage.restoration
+    --hidden-import=skimage.exposure
+    --hidden-import=skimage.filters
+    --hidden-import=nibabel
+    --hidden-import=nibabel.nifti1
+    --hidden-import=openpyxl
+    --hidden-import=license_guard
+    --hidden-import=deepseek_client
+    --hidden-import=pacs_client
+    --hidden-import=pynetdicom
+    --hidden-import=pynetdicom.sop_class
+    --hidden-import=pydicom
+    --hidden-import=segmentation.roi_pipeline
+    --hidden-import=segmentation.roi_types
+    --hidden-import=segmentation.roi_label_map
+    --hidden-import=segmentation.detectors.semantic_detector
+    --hidden-import=mcp_ssd_vr.dicom
+    --hidden-import=mcp_ssd_vr.gui_bridge
+    --hidden-import=mcp_ssd_vr.bridge_client
+    --hidden-import=mcp_ssd_vr.state
+    --hidden-import=mcp_ssd_vr.config
+    --hidden-import=mcp_ssd_vr.recorder
+    --hidden-import=mcp_ssd_vr.tools
+    --hidden-import=mcp_ssd_vr.tools.cases
+    --exclude-module=tkinter
+    --exclude-module=medim
+    --exclude-module=torchio
+    --exclude-module=dipy
+    --exclude-module=monai
+    ssd_vr_viewer.py

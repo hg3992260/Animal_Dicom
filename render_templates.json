@@ -1,0 +1,126 @@
+{
+  "_description": "SSD+VR CLI 渲染模板预设。每个模板定义一组渲染参数，可通过 --template 调用。",
+  "_usage": "python ssd_vr_cli.py --input /data/DICOM --template clinical_vessel",
+  "templates": {
+    "clinical_vessel": {
+      "description": "临床血管展示 — Cinematic 模式 + CT-AAA 预设，适合血管铸型/CTA 数据",
+      "mode": "cinematic",
+      "preset": "CT-AAA",
+      "ssd_opacity": 0.4,
+      "vr_opacity": 0.85,
+      "camera": "coronal",
+      "background": "light",
+      "denoise": "gaussian"
+    },
+    "bone_surface": {
+      "description": "骨骼表面着色 — 高清表面 + CT-Bone 预设，适合骨科/骨窗数据",
+      "mode": "hd_surface",
+      "preset": "CT-Bone",
+      "ssd_opacity": 0.7,
+      "vr_opacity": 0.2,
+      "camera": "three_quarter",
+      "background": "dark",
+      "ambient": 0.18,
+      "diffuse": 0.72,
+      "specular": 0.30,
+      "specular_power": 25.0,
+      "denoise": "gaussian"
+    },
+    "nature_glass_bone": {
+      "description": "Nature 自然通道 — 玻璃样骨骼轮廓，适合学术出版封面图",
+      "mode": "nature_channels",
+      "preset": "CT-Bones",
+      "ssd_opacity": 0.55,
+      "vr_opacity": 0.3,
+      "camera": "three_quarter",
+      "background": "light",
+      "denoise": "gaussian"
+    },
+    "vessel_enhanced": {
+      "description": "血管增强 — Frangi 增强 + Cinematic 血管渲染",
+      "mode": "cinematic",
+      "preset": "CT-AAA",
+      "ssd_opacity": 0.3,
+      "vr_opacity": 0.9,
+      "camera": "coronal",
+      "background": "light",
+      "frangi": true,
+      "denoise": "gaussian"
+    },
+    "bone_monochrome": {
+      "description": "骨骼单色 — 高对比度骨骼展示，适合骨科教学",
+      "mode": "bone_mono",
+      "preset": "CT-Bone",
+      "ssd_opacity": 0.75,
+      "vr_opacity": 0.1,
+      "camera": "coronal",
+      "background": "dark",
+      "ambient": 0.12,
+      "diffuse": 0.55,
+      "specular": 0.85,
+      "specular_power": 120.0,
+      "denoise": "gaussian"
+    },
+    "cardiac_detail": {
+      "description": "心脏血管 — 心脏 CTA 预设 + 胸腔窗口",
+      "mode": "cinematic",
+      "preset": "CT-Cardiac",
+      "ssd_opacity": 0.3,
+      "vr_opacity": 0.85,
+      "camera": "front_top",
+      "background": "light",
+      "denoise": "gaussian"
+    },
+    "pulmonary_vessels": {
+      "description": "肺血管 — 肺部血管预设 + 肺窗",
+      "mode": "cinematic",
+      "preset": "CT-Pulmonary-Arteries",
+      "ssd_opacity": 0.25,
+      "vr_opacity": 0.88,
+      "camera": "coronal",
+      "background": "light",
+      "denoise": "gaussian"
+    },
+    "dramatic_angiography": {
+      "description": "戏剧性血管造影 — 高对比度 + 戏剧光 + 暗背景",
+      "mode": "cinematic",
+      "preset": "CT-AAA",
+      "ssd_opacity": 0.0,
+      "vr_opacity": 0.95,
+      "camera": "three_quarter",
+      "background": "dark",
+      "ambient": 0.12,
+      "diffuse": 0.82,
+      "specular": 0.45,
+      "specular_power": 60.0,
+      "denoise": "gaussian"
+    },
+    "quick_preview": {
+      "description": "快速预览 — 低分辨率 1024×768，适合批量扫描",
+      "mode": "stable",
+      "preset": "CT-Soft-Tissue",
+      "ssd_opacity": 0.5,
+      "vr_opacity": 0.7,
+      "camera": "coronal",
+      "background": "light",
+      "denoise": "off",
+      "cpu": true,
+      "render_size": [1024, 768]
+    },
+    "paper_figure": {
+      "description": "论文出版级 — 4K 分辨率 + Cinematic + 多角度输出",
+      "mode": "cinematic",
+      "preset": "CT-AAA",
+      "ssd_opacity": 0.4,
+      "vr_opacity": 0.82,
+      "camera": "three_quarter",
+      "background": "light",
+      "ambient": 0.10,
+      "diffuse": 0.78,
+      "specular": 0.42,
+      "specular_power": 45.0,
+      "denoise": "nlm",
+      "render_size": [4096, 2304]
+    }
+  }
+}

@@ -1,0 +1,129 @@
+name: Build SSD+VR for Windows (EXE)
+
+on:
+  push:
+    branches: [main, master]
+    # tag 也要触发，否则那些 if: refs/tags/v 的 Release 步骤永远不会执行
+    tags: ['v*']
+    # 文档改动不必重新打包（曾经一个 README 提交就触发一次完整 EXE 构建 + 644 MB 产物）
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install cupy-cuda12x
+          pip install pyinstaller
+
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          $er = "exposure-render-master/exposure-render-master/Source/build/Release/ErCore.dll"
+          $args = @(
+            "--onefile", "--noconsole", "--name=SSD_VR_Fusion_Viewer", "--icon=logo.ico",
+            "--runtime-hook=pyi_rth_vcruntime.py",
+            "--add-data=scientific.json;.", "--add-data=dark.qss;.",
+            "--add-data=presets.xml;.", "--add-data=logo.ico;.", "--add-data=logo.png;.",
+            "--add-data=segmentation;segmentation",
+            "--add-data=mcp_ssd_vr;mcp_ssd_vr",
+            "--collect-all=PySide6", "--collect-all=PyCt6", "--collect-submodules=PyCt6",
+            "--collect-data=PyCt6", "--collect-all=vtkmodules", "--collect-all=SimpleITK",
+            "--hidden-import=PyCt6", "--hidden-import=PyCt6.widgets.c_button",
+            "--hidden-import=PyCt6.widgets.c_label", "--hidden-import=PyCt6.widgets.c_line_edit",
+            "--hidden-import=PyCt6.widgets.c_combo_box", "--hidden-import=PyCt6.widgets.c_slider",
+            "--hidden-import=PyCt6.widgets.c_frame", "--hidden-import=PyCt6.widgets.c_text_edit",
+            "--hidden-import=PyCt6.windows.c_main_window", "--hidden-import=PyCt6.windows.c_toplevel",
+            "--hidden-import=PyCt6.appearance.theme_manager", "--hidden-import=PyCt6.appearance.mode_manager",
+            "--hidden-import=PySide6.QtSvg", "--hidden-import=PySide6.QtSvgWidgets",
+            "--hidden-import=vtkmodules.qt.QVTKRenderWindowInteractor",
+            "--hidden-import=scipy.ndimage", "--hidden-import=skimage.restoration",
+            "--hidden-import=skimage.filters", "--hidden-import=nibabel",
+            "--hidden-import=pacs_client", "--hidden-import=pynetdicom",
+            "--hidden-import=pynetdicom.sop_class", "--hidden-import=pydicom",
+            "--hidden-import=segmentation.roi_pipeline", "--hidden-import=segmentation.roi_types",
+            "--hidden-import=segmentation.roi_label_map",
+            "--hidden-import=segmentation.detectors.semantic_detector",
+            "--hidden-import=mcp_ssd_vr.gui_bridge", "--hidden-import=mcp_ssd_vr.bridge_client",
+            "--hidden-import=mcp_ssd_vr.bridge_registry",
+            "--hidden-import=mcp_ssd_vr.state", "--hidden-import=mcp_ssd_vr.config",
+            "--hidden-import=mcp_ssd_vr.recorder",
+            "--exclude-module=tkinter",
+            "--exclude-module=medim", "--exclude-module=torchio",
+            "--exclude-module=dipy", "--exclude-module=monai"
+          )
+          if (Test-Path $er) { $args += "--add-binary=$er;." }
+
+          # ============================================================
+          # 修复 PyInstallerImportError: Failed to load dynlib/dll
+          #   ...\sklearn\.libs\vcomp140.dll
+          # sklearn/_distributor_init.py 无条件 WinDLL(<sklearn>/.libs/vcomp140.dll)，
+          # 而 .libs 是点开头的隐藏目录，分发/打包环节容易把它丢掉。
+          # PyInstaller 的 pyimod03_ctypes._frozen_name() 在原路径不存在时，
+          # 会回退到 $MEIPASS\<basename>；把运行库放进 $MEIPASS 根目录即可兜底。
+          # ============================================================
+          $pyBase = (python -c "import sys;print(sys.base_prefix)").Trim()
+          $skLibs = ""
+          try {
+            $skLibs = (python -c "import sklearn,os;print(os.path.join(os.path.dirname(sklearn.__file__),'.libs'))" 2>$null).Trim()
+          } catch { $skLibs = "" }
+
+          $searchDirs = @()
+          if ($skLibs) { $searchDirs += $skLibs }
+          $searchDirs += $pyBase
+          $searchDirs += (Join-Path $env:SystemRoot "System32")
+
+          $placed = @()
+          foreach ($d in @("vcomp140.dll","msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")) {
+            $src = $null
+            foreach ($dir in $searchDirs) {
+              if (-not $dir) { continue }
+              $cand = Join-Path $dir $d
+              if (Test-Path -LiteralPath $cand) { $src = $cand; break }
+            }
+            if ($src) {
+              $args += "--add-binary=$src;."
+              $placed += $d
+            } else {
+              Write-Warning "找不到运行库: $d"
+            }
+          }
+          Write-Host ("staged into `$MEIPASS: " + ($placed -join ", "))
+          foreach ($need in @("vcomp140.dll","msvcp140.dll")) {
+            if ($placed -notcontains $need) {
+              throw "$need 在 sklearn/.libs、Python 目录、System32 中均未找到，无法避免 sklearn 导入失败。"
+            }
+          }
+
+          pyinstaller @args ssd_vr_viewer.py
+
+      - name: Upload EXE
+        # tag 运行时跳过 artifact（Release 资产是另一套配额；产物配额满了会连带掐死 Release 步骤）
+        if: github.ref_type == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSD_VR_Fusion_Viewer_Win
+          path: dist/SSD_VR_Fusion_Viewer.exe
+          # 产物 644 MB/次，保留期不要长；需要长期保存请打 tag 走 Release
+          retention-days: 3
+
+      - name: Release (tag only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SSD_VR_Fusion_Viewer.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
