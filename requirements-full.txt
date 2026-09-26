@@ -1,15 +1,29 @@
 # ============================================================
-# 完整版依赖（GPU 加速 + 3D SAM / SAM-Med3D）
+# 完整版依赖（GPU 加速 + 3D SAM / SAM-Med3D）—— CI 与本地通用
+#
 # 用法:
-#   1) 先装 CUDA 版 PyTorch（必须用 --index-url，否则会装成 CPU 版）:
+#   1) 先装 CUDA 版 PyTorch（**必须**带 --index-url，否则会装成 CPU 版）:
 #        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
 #   2) 再装本文件:
 #        pip install -r requirements-full.txt
-#   3) 首次运行 3D SAM 自动下载权重 (~383MB)，或先跑: python download_sam_med3d.py
-# 说明: torch 不写在本文件内（避免被 PyPI 的 CPU 轮子覆盖）。
+#   3) SAM-Med3D 代码放到 frame/SAM-Med3D-main（含 utils/、segment_anything/）:
+#        git clone --depth 1 https://github.com/uni-medical/SAM-Med3D.git frame/SAM-Med3D-main
+#      权重 sam_med3d_turbo.pth（~384 MB）首次使用 3D SAM 时自动下载，
+#      也可手动放入 frame/SAM-Med3D-main/ckpt/
+#   说明: torch 不写在本文件内（避免被 PyPI 的 CPU 轮子覆盖）。
+#
+# ⚠️ 这里基于 requirements-build.txt（**不是** requirements.txt）：
+#   requirements.txt 含 TotalSegmentator / nnunetv2 → 会拖入 4.5 GB torch 与一堆
+#   与 GUI 无关的包（自动 ROI 功能已移除），既慢又容易装出依赖冲突；
+#   requirements-build.txt 才带 pyinstaller（缺它 full 任务会在构建步骤直接报
+#   "The term 'pyinstaller' is not recognized"）。
 # ============================================================
--r requirements.txt
+-r requirements-build.txt
 
 # 3D SAM (SAM-Med3D) 运行时
 medim>=0.1.2
 torchio>=0.18.0
+# monai 是 medim 的运行期依赖（medim 内部 import monai）；
+# 缺它会报 "No module named 'monai'"。monai 自身依赖 sympy。
+monai>=1.3.0
+sympy>=1.12
