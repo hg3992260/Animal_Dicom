@@ -76,3 +76,19 @@
 ### 许可
 
 - 仓库采用 **MIT License**；源码可自由构建，分发的构建产物带 30 天运行期限——两者关系见 README「许可与致谢」。
+
+### 发布资产（Releases）
+
+| 资产 | 大小 | 内容 |
+|---|---|---|
+| `Animal_Dicom_v1.0.0_win64_portable.zip` | 424 MB | **基础版**：完整功能，无 GPU 加速 / 无 3D SAM |
+| `..._win64_full_part1of4.zip` | 582 MB | **完整版**：exe + 资源 + `frame/SAM-Med3D-main` + 其余 `_internal` |
+| `..._win64_full_part2of4.zip` | 101 MB | 完整版：`_internal/torch`（主体）+ `cupy*` |
+| `..._win64_full_part3of4.zip` | 1023 MB | 完整版：`_internal/torch/lib` 第 1 组 |
+| `..._win64_full_part4of4.zip` | 1271 MB | 完整版：`_internal/torch/lib` 第 2 组（`torch_cuda`/`cudnn`/`cublasLt`） |
+
+完整版 = **GPU 加速（cupy + CUDA 运行时）+ 3D SAM（torch/medim/torchio/monai）**；
+四个包解压到同一目录合并。分包原因：解压 5.2 GB / 压缩 ~3 GB > GitHub 单资产 2 GB 上限。
+实测（`ssdvr_sam_probe`）：torch 2.6.0+cu124、CUDA 可用（RTX 3080）、cupy 14.0.1（GPU=True）、
+medim/torchio/monai 齐、`sam_adapter` 可 import。
+

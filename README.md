@@ -91,24 +91,41 @@
 
 **Windows 64 位 · 便携免安装**：从 [Releases](https://github.com/hg3992260/Animal_Dicom/releases/tag/v1.0.0) 下载
 
+### 基础版（约 424 MB，单包）
+
 | 资产 | 大小 | 说明 |
 |---|---|---|
-| `Animal_Dicom_v1.0.0_win64_portable.zip` | ~424 MB | 解压后双击 `Animal_Dicom.exe`；含 `_internal/`（不可只拷 exe） |
+| `Animal_Dicom_v1.0.0_win64_portable.zip` | 424 MB | 解压后双击 `Animal_Dicom.exe`；含 `_internal/`（不可只拷 exe） |
 
-包内 `README-FIRST.txt` 是给使用者的快速说明（运行方式、五页签、MCP 开关、期限、常见问题）。
+渲染 12 模式 / MPR / 测量 / PACS / 档案 / DeepSeek AI / 期限**完整**，已含 `ErCore.dll`；
+仅**不含** GPU 加速与 3D SAM（见下表）。
 
-**这是"基础版"**（为控制体积到可上传的 424 MB）：
+### 完整版（含 GPU 加速 + 3D SAM，四个分包共约 2.9 GB）
 
-| 内容 | 状态 |
+| 资产 | 大小 |
 |---|---|
-| 12 种渲染模式 / SSD+VR 融合 / MPR 阅片 / 测量 / 窗宽窗位 | ✅ 完整 |
-| PACS 取片 / 档案中心 / DeepSeek AI / 30 天期限 | ✅ 完整 |
-| ErCore.dll（CR 路径追踪所需） | ✅ 已附带（无 NVIDIA 显卡时相关模式自动回退） |
-| GPU 加速 `cupy` + CUDA 运行时（约 1.9 GB） | ❌ 未含 → Frangi 等走 CPU，明显更慢 |
-| 3D SAM 推理依赖 `torch`/`medim`（约 4.5 GB） | ❌ 未含 → 该页的分割按钮不可用 |
+| `Animal_Dicom_v1.0.0_win64_full_part1of4.zip` | 582 MB（exe + 资源 + `frame/` + 其余 `_internal`） |
+| `..._part2of4.zip` | 101 MB（`_internal/torch` 主体 + `cupy*`） |
+| `..._part3of4.zip` | 1023 MB（`_internal/torch/lib` 第 1 组） |
+| `..._part4of4.zip` | 1271 MB（`_internal/torch/lib` 第 2 组：`torch_cuda.dll` / `cudnn` / `cublasLt`） |
 
-> 需要完整能力（GPU Frangi + 3D SAM）时请用源码安装 `requirements-full.txt`，
-> 或参考 `animal_dicom.spec` 自行重打包（去掉 excludes 里的 cupy/torch 即可）。
+> **四个包全部解压到同一个目录**即可合并成完整程序（内部路径互不重叠，无需改名或顺序）。
+> 3D SAM 首次使用时自动下载权重（~384 MB）；需要 NVIDIA GPU + CUDA 12，建议可用显存 ≥6 GB。
+> 分包原因：解压后 5.2 GB、压缩后 ~3 GB，超过 GitHub 单资产 2 GB 上限。
+
+### 两种版本对比
+
+| 内容 | 基础版 | 完整版 |
+|---|---|---|
+| 12 渲染模式 / 融合渲染 / MPR / 测量 / 窗宽窗位 | ✅ | ✅ |
+| PACS 取片 / 档案中心 / DeepSeek AI / 30 天期限 | ✅ | ✅ |
+| ErCore.dll（CR 路径追踪所需） | ✅（无 NVIDIA 时自动回退） | ✅ |
+| **GPU 加速**（cupy + CUDA 运行时） | ❌ Frangi 等走 CPU，明显更慢 | ✅ |
+| **3D SAM**（torch + medim + torchio + monai） | ❌ 分割按钮不可用 | ✅ |
+
+> 实测（完整版，`ssdvr_sam_probe`）：torch 2.6.0+cu124、**CUDA 可用（RTX 3080）**、
+> cupy 14.0.1（GPU=True）、medim/torchio/monai 齐备、`sam_adapter` 可 import。
+> 已知限制：显存紧张时 Frangi 的 GPU 预处理可能失败（会自动回退 CPU）。
 > 启动异常会写 `startup_error.log` 到 exe 同目录，便于反馈问题。
 
 

@@ -192,11 +192,33 @@ Release 资产 `Animal_Dicom_v1.0.0_win64_portable.zip`（**424 MB**，解压后
 
 **基础版 vs 完整版**
 
-| | 基础版（本 Release 资产） | 完整版（源码 / `main-full.yml`） |
+| | 基础版（`..._win64_portable.zip` 424 MB） | 完整版（4 个分包，共 2.9 GB） |
 |---|---|---|
 | 渲染 12 模式 / MPR / 测量 / 窗宽窗位 | ✅ | ✅ |
-| PACS / 档案 / AI / 期限 | ✅ | ✅ |
-| GPU Frangi（cupy + CUDA 运行时） | ❌ CPU 回退（较慢） | ✅ |
-| 3D SAM（torch + medim + 权重 383 MB） | ❌ | ✅ |
-| 体积 | 424 MB（zip）/ 1.16 GB（解压） | ~5.9 GB（onedir） |
+| PACS / 档案 / AI / 期限 / ErCore.dll | ✅ | ✅ |
+| **GPU 加速**（cupy + CUDA 运行时） | ❌ CPU 回退（较慢） | ✅（`_internal/torch/lib` 内约 2.8 GB CUDA 运行时） |
+| **3D SAM**（torch + medim + torchio + monai） | ❌ | ✅（+ `frame/SAM-Med3D-main`，权重首次自动下载） |
+| 解压后体积 | 1.16 GB | 5.19 GB |
+
+**完整版分包规则**（GitHub 单资产上限 2 GB，压缩后约 3 GB 必须拆）：
+
+| 包 | 内容 | 压缩后 |
+|---|---|---|
+| part1of4 | `Animal_Dicom.exe`、`_internal/`（除 torch/cupy*）、`frame/`、`README-FIRST.txt` | 582 MB |
+| part2of4 | `_internal/torch`（不含 `lib`）+ `_internal/cupy*` | 101 MB |
+| part3of4 | `_internal/torch/lib` 第 1 组（`cufft`/`cusparse`/`torch_cpu` …） | 1023 MB |
+| part4of4 | `_internal/torch/lib` 第 2 组（`torch_cuda` 913 MB / `cudnn_engines_precompiled` 562 MB / `cublasLt` 451 MB） | 1271 MB |
+
+四个包都是**内容级** zip（内部路径为 `_internal/...`，互不重叠）→ 解压到同一目录即合并。
+CI（`main-full.yml`）按同样规则自动分包；`torch/lib` 按体积均分（每组原始体积 ≤1.8 GB）。
+
+**完整版实测（`ssdvr_sam_probe`）**：torch 2.6.0+cu124 ／ CUDA 可用（NVIDIA GeForce RTX 3080）／
+cupy 14.0.1（GPU=True）／ medim·torchio·monai(1.5.2) 齐备 ／ `sam_adapter` import OK ／
+`frame/SAM-Med3D-main` 与 `ckpt` 路径正确。渲染 stable 6056、cinematic 28567 色。
+⚠️ 尚未验证：冻结环境里 `frangi_channel` 的端到端（显存紧张时 GPU 预处理可能失败）。
+
+**打包时容易混进去的本机产物**（必须清掉，否则会把本机期限锚点/测试记录发给用户）：
+`.trial_anchor.json`（期限锚点）、`mcp_records/`（档案/ROI/事件）、`startup_error.log`、
+`deepseek_config.json`、`pacs_nodes.json`。CI 的分包步骤已加自动清除。
+
 
