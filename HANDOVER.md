@@ -1,5 +1,244 @@
 # 项目交接文档 — SSD+VR Viewer (animal_dicom)
 
+> 轮次: Round 41 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: GPU+3D SAM 完整版发布
+
+---
+
+## 1. 任务摘要
+
+用户问：「GPU 加速和 3D SAM 是否都已经包含？」——此前只有**基础版**（424 MB）在 Release 里，
+本地虽已构建完整版（5.19 GB）但未发布。本轮把**完整版**拆包发布到 v1.0.0，使答案变成"是"。
+
+1. 完整版按 GitHub 单资产 2 GB 上限拆成 **4 个内容级 zip**（合计 2.91 GB）并上传；
+2. 发现并清掉一个**严重发布缺陷**：part1 里混进了本机产物 `.trial_anchor.json`（期限锚点）
+   与 `mcp_records/`（测试档案/ROI/事件）；
+3. 同步更新 README / CHANGELOG / DEPENDENCIES / 随包说明；CI 的分包逻辑也改为 4 包（本地，待上传）。
+
+## 2. 发布结果（v1.0.0）
+
+| 资产 | 大小 | 内容 | digest 校验 |
+|---|---|---|---|
+| `Animal_Dicom_v1.0.0_win64_portable.zip` | 424.2 MB | 基础版（无 GPU / 无 3D SAM） | ✅ 与本地一致 |
+| `..._win64_full_part1of4.zip` | 582.1 MB | exe + 资源 + `frame/SAM-Med3D-main` + 其余 `_internal` | ✅ |
+| `..._win64_full_part2of4.zip` | 101.4 MB | `_internal/torch`（主体）+ `cupy_backends`/`cupyx`/`cupy` | ✅ |
+| `..._win64_full_part3of4.zip` | 1022.9 MB | `_internal/torch/lib` 第 1 组（`cufft64_11` 278 MB、`cusparse64_12` 263 MB、`torch_cpu` 240 MB …34 条） | ✅ |
+| `..._win64_full_part4of4.zip` | 1271.3 MB | `_internal/torch/lib` 第 2 组（`torch_cuda.dll` 913 MB、`cudnn_engines_precompiled64_9` 562 MB、`cublasLt64_12` 451 MB） | ✅ |
+
+资产合计 **3.32 GB**；`gh release view` 的 `digest` 与本地 sha256 **逐一比对一致**。
+
+**解压方式**：4 个包都是"内容级"zip（内部路径为 `_internal\...`，互不重叠）→
+**全部解压到同一个目录**即合并成 `Animal_Dicom.exe + _internal\ + frame\`（无需改名或顺序）。
+
+## 3. 完整版内容与实测
+
+**GPU 加速**：`cupy 14.0.1`（含 `cupy_backends`）+ CUDA 运行时（在 `_internal/torch/lib`，约 2.8 GB）。
+**3D SAM**：`torch 2.6.0+cu124` + `medim` + `torchio` + `monai 1.5.2` + `frame/SAM-Med3D-main`（exe 同级）。
+
+`ssdvr_sam_probe` 实测（在完整版 EXE 上）：
+```
+torch 2.6.0+cu124 | cuda_available=True (NVIDIA GeForce RTX 3080)
+cupy 14.0.1, cupy_gpu=True | medim ok | torchio 1.2.0 | monai 1.5.2
+sam_dir_exists=True | ckpt_exists=False（首次使用时自动下载 384 MB）
+sam_adapter_import=ok
+```
+渲染：stable 6056 色、cinematic 28567 色（真实 176 层 CT）；无 `startup_error.log`；退出 rc=0。
+
+## 4. 本轮修掉的发布缺陷（重要）
+
+| 缺陷 | 后果 | 修法 |
+|---|---|---|
+| **part1 含本机 `.trial_anchor.json`** | 用户装好后"首次运行日期"显示为**我的构建日期**，且带着我的 `install_id` 哈希 | 从 dist 删除后重打 part1（582.1 MB）并重传，digest 复验一致 |
+| **part1 含 `mcp_records/`** | 用户档案中心里出现我的测试档案/ROI/事件记录 | 同上（连同 `temp/`、`deepseek_config.json`、`pacs_nodes.json`、`startup_error.log` 一并清除） |
+| 首版 part2 = 2395 MB | 超过 GitHub 单资产 2 GB，上传会被拒 | 改为 4 包：`torch/lib` 按体积均分（每组原始 ≤1.8 GB） |
+
+> 已在 `main-full.yml`（本地版）的分包步骤里加入**自动清除本机产物**，并把分包逻辑改为 4 包。
+
+## 5. 文件变更清单
+
+| 文件 | 操作 | 摘要 |
+|---|---|---|
+| `packaging/README-FIRST.txt` | 重写 | 基础版/完整版两节；**四包解压到同一目录**；3D SAM 权重与显存要求；FAQ |
+| `README.md` | 修改 | 下载区拆两张表（基础版 / 完整版四分包）+ 两版对比 + 实测证据 |
+| `CHANGELOG.md` | 修改 | 新增「发布资产」小节（5 个资产的体积与内容） |
+| `DEPENDENCIES.md` | 修改 | §8 补完整版分包规则、`torch/lib` 分组明细、实测、**打包必须清除的本机产物清单** |
+| `.github/workflows/main-full.yml` | 修改（**未提交**） | 分包改 4 包（`torch/lib` 按体积均分）+ 自动清除本机产物 |
+| Release v1.0.0 | 新增 4 资产 | 完整版四分包；`[skip ci]` 提交 `22eb5d9` 避免触发旧 workflow |
+
+## 6. 关键决策
+
+| 决策点 | 选择 | 原因 |
+|---|---|---|
+| 完整版怎么发 | 4 个内容级 zip（而非单包/分卷） | 单资产上限 2 GB；内容级 zip 可"解压到同一目录"合并，用户无需拼接文件 |
+| 是否随包带 SAM 权重 | 不带 | 第三方权重许可 + 384 MB；首次使用自动下载 |
+| 是否带 `.trial_anchor.json` | **绝不带** | 会让用户看到我的首次运行日期并继承我的锚点 |
+| 提交用 `[skip ci]` | 是 | 旧 workflow 仍监听 push，避免白烧私有仓库 Actions 时长 |
+
+## 7. 遗留问题与待办
+
+- [ ] **3 个 workflow 仍未入库**（缺 `workflow` scope）：本地已改好（4 包分发 + 清本机产物 + 发 Release）；
+      二选一：`gh auth refresh -h github.com -s workflow` 后我推送，或网页覆盖上传
+      `I:\animal_dicom\.github\workflows\{main,main-full,macos}.yml`。
+- [ ] **完整版 `frangi_channel` 端到端未通过**（冻结环境里 GPU 预处理期间进程消失；无 WER、rc=0，
+      疑似显存压力触发驱动重置）。建议：显存不足时自动回退 CPU，或对可用显存设阈值。
+- [ ] 建议用户在 Settings → Billing 查看 Actions 制品配额与分钟数（macOS 失败即因制品配额满）。
+- [ ] 可选：把 `.github/workflows` 的 push 触发彻底去掉（已在新版做了），避免每次 push 跑 3 个构建。
+
+## 8. 错误记录
+
+| 时间 | 级别 | 来源 | 描述 | 解决状态 |
+|------|------|------|------|---------|
+| - | error | 发布 | part2 首次打成 2395 MB（超 2 GB 上限） | ✅ 改 4 包（torch/lib 均分） |
+| - | error | 发布 | part3 首次打成 2294 MB（CUDA DLL 压缩率低） | ✅ 同上 |
+| - | error | 发布 | part1 混入本机 `.trial_anchor.json` / `mcp_records` | ✅ 清除+重打+重传+复验 digest |
+| - | warn | 工具 | `python -c` 里 Windows 路径 `\a` 被当转义（`I:\x07nimal_dicom`） | ✅ 改用独立 .py 脚本 |
+| - | warn | CI | 我的两次 push 触发旧 workflow 共 5 个构建 | ✅ 全部 cancel；此后提交加 `[skip ci]` |
+
+---
+
+## 历史轮次
+<details>
+<summary>Round R-40 — 2026-09-26 | GPU/3D SAM 完整版 + GitHub Actions 编译 (点击展开)</summary>
+
+# 项目交接文档 — SSD+VR Viewer (animal_dicom)
+
+> 轮次: Round 40 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: GPU/3D SAM 完整版 + GitHub Actions 编译
+
+---
+
+## 1. 任务摘要
+
+用户指出便携包缺两块能力（**GPU 加速 cupy+CUDA**、**3D SAM 的 torch/medim**），随后表示
+「我在 github 新建 workflow，通过 github 编译」。本轮完成：
+
+1. **完整版本地构建成功**：`ANIMAL_DICOM_FULL=1` + `animal_dicom.spec` → onedir **5.19 GB**，
+   `sam_probe` 实测 GPU/3D SAM 栈全部就绪（详见 §3）。
+2. **修掉完整版暴露的 3 个打包缺陷**（cupy softlink 子模块、sympy、子进程崩溃）。
+3. **诊断 CI 现状**：用户上传的 3 个 workflow 是原项目的内联脚本 →
+   **编出来的 EXE 会因缺 `license_guard` 直接拒启**（+ 丢皮肤/PyCt6 数据），且
+   `upload-artifact` 撞上**账号级制品存储配额已满**（macOS 就是死在这一步，不是编译失败）。
+4. **重写 3 个 workflow**（YAML 已校验）：改用 `animal_dicom.spec`、发布到 **Release**（绕开制品配额）、
+   支持基础版/完整版（完整版自动分包 2×<2 GB）、只在 `workflow_dispatch`/`v* tag` 触发（省时长）。
+
+## 2. 依赖清点补充（GPU / 3D SAM 到底需要什么）
+
+| 能力 | 需要的包 | 额外资源 | 本机实测 |
+|---|---|---|---|
+| GPU Frangi | `cupy-cuda12x`（+ CUDA 运行时） | 无 | cupy 14.0.1 / GPU=True |
+| 12 渲染模式 / CR | 已含；CR 另需 `ErCore.dll` | — | 已随包 |
+| 3D SAM | `torch(cu124)` + `medim` + `torchio` + **`monai`**（medim 运行期依赖，**此前 requirements 漏列**） | **`frame/SAM-Med3D-main`（代码，exe 同级）**；权重 `sam_med3d_turbo.pth` 384 MB 首次用时自动下载 | torch 2.6.0+cu124 / CUDA 可用（RTX 3080）/ medim·torchio·monai 齐 / `sam_adapter` import OK |
+
+`segmentation/config.py` 的路径约定（冻结版按 `sys.executable` 目录）：
+`<exe目录>/frame/SAM-Med3D-main`、权重 `<...>/ckpt/sam_med3d_turbo.pth`。
+
+## 3. 完整版构建与验证
+
+| 项 | 结果 |
+|---|---|
+| 构建 | `ANIMAL_DICOM_FULL=1 pyinstaller --clean --noconfirm animal_dicom.spec` → 8.5 分钟 |
+| 产物 | `dist_animal/Animal_Dicom_Full/` **5.19 GB** / 15167 文件（含 `frame/SAM-Med3D-main` 7.3 MB） |
+| CUDA 运行时位置 | `_internal/torch/lib/`：`torch_cuda.dll` 913 MB、`cudnn_*` 895 MB、`cublasLt` 451 MB、`cufft` 278 MB、`cusparse` 263 MB… ≈2.8 GB |
+| `sam_probe` | torch 2.6.0+cu124 ✓ / **cuda_available=True（NVIDIA GeForce RTX 3080）** ✓ / **cupy 14.0.1 且 GPU=True** ✓ / medim·torchio·monai(1.5.2) ✓ / sam_adapter import ok ✓ / `frame` 与 ckpt 路径正确 ✓ |
+| 渲染 | stable 6056 色、cinematic 28567 色（真实 176 层 CT） |
+| 冷启动/退出 | 无 `startup_error.log`、退出 rc=0 ✓ |
+| ⚠️ 未完成验证 | **冻结环境里 `frangi_channel` 端到端**：两次在 GPU 预处理进行中进程消失（`bridge disconnected`，无 WER 崩溃记录、rc=0 → 疑似显存压力触发显卡驱动重置；当时可用显存仅 ~5.7 GB，源环境跑成功时是 8.7 GB）。**未宣称通过**。 |
+
+### 完整版暴露并修掉的 3 个打包缺陷（都写在 spec 注释里）
+
+| 缺陷 | 现象 | 修法 |
+|---|---|---|
+| cupy 的 **softlink 子模块**没进包 | `ModuleNotFoundError: cupy_backends.cuda._softlink` → 静默回退 CPU | `collect_submodules('cupy'/'cupyx'/'cupy_backends')` + 显式 `cupy_backends.cuda._softlink` |
+| `monai` 缺 `sympy` | `monai` ImportError（medim 运行期需要） | FULL 模式不排除 sympy，并显式 hidden-import `sympy`/`mpmath` |
+| `collect_all(medim/torchio/monai)` **子进程崩溃** | `Child process died calling _collect_submodules() ... exit code 3` | 这三个包 import torch → 只 `collect_data_files`，模块交给静态分析+hiddenimports（torch 的 libiomp5 与 VTK/SimpleITK OpenMP 冲突，与 `lifecycle.py` 的老注释同源） |
+
+## 4. GitHub Actions 现状与改造
+
+### 4.1 现状（用户上传后）
+
+- 3 个 workflow 已上传到 main：`macos.yml`、`main-full.yml`、`main.yml`（与本地原文件同尺寸）。
+- 运行结果：macOS **失败**、Windows EXE 与 FULL **长时间挂起**（被我取消）。
+- 根因（关键）：
+  1. **制品存储配额已满**：`Failed to CreateArtifact: Artifact storage quota has been hit`
+     —— macOS 的编译其实成功了，死在 `actions/upload-artifact`。制品列表已空（已过期），
+     但 GitHub 每 6–12 小时才重算额度。
+  2. **旧 main.yml 缺 `license_guard`**（以及 `warm_orange.json`/`retro.qss`/`light.qss`/
+     `case_template.json`/`render_templates.json`/`deepseek_client`/`openpyxl`）→ 编出的 EXE
+     会"完整性检查失败"直接拒启（退出码 4）。
+  3. 旧 workflow 监听 `push: main` → **每次 push 都触发 3 个完整构建**（私有仓库按分钟计费）。
+
+### 4.2 本地已改好的 3 个 workflow（待推送/上传）
+
+| 文件 | 关键改动 |
+|---|---|
+| `main.yml`（基础版） | 用 `animal_dicom.spec`；装 `requirements-build.txt`（不含 TotalSegmentator/nnunetv2 → 不拖 4.5 GB torch）；**资源自检**（exe/皮肤/主题/模板/PyCt6 数据/qwindows/ErCore 缺一即 fail）；7z 打包；**发 Release**（tag→正式；手动→`ci-latest`）；仅 `workflow_dispatch` + `tags: v*` 触发 |
+| `main-full.yml`（完整版） | 先"释放磁盘"；装 torch cu124 + `requirements-full.txt`；`git clone` SAM-Med3D 到 `frame/SAM-Med3D-main`；`ANIMAL_DICOM_FULL=1` 构建；自检（含 `torch_cuda.dll`/`cupy_backends/cuda`/`sam_adapter.py`/`click_method.py`）；**拆两个 <2 GB 包**（part2 = torch/cupy/cuda/part1 = 其余，都解压到同一目录即合并）；发 Release（`ci-latest-full`） |
+| `macos.yml` | 去掉 `upload-artifact`（配额），改为重命名 DMG 后 **发 Release**（`ci-latest-macos`） |
+
+三个文件均通过 YAML 解析校验（steps: 6 / 9 / 11）。
+
+**为什么我推不上去**：令牌缺 `workflow` scope（`gh auth status` → `gist, read:org, repo`），
+推送 `.github/workflows/*` 会被 GitHub 拒绝：
+`refusing to allow an OAuth App to create or update workflow ... without 'workflow' scope`。
+本地这 3 个文件现处于**已修改未提交**状态（`git status` 显示 ` M .github/workflows/*.yml`）。
+
+## 5. 文件变更清单
+
+| 文件 | 操作 | 摘要 |
+|---|---|---|
+| `animal_dicom.spec` | 修改 | `ANIMAL_DICOM_FULL=1` 切完整版；修 cupy softlink / sympy / collect_all 子进程崩溃 |
+| `requirements-build.txt` | 新增 | CI+基础版依赖（不含 TotalSegmentator/nnunetv2） |
+| `requirements-full.txt` | 修改 | 补 `monai`（medim 运行期依赖）+ `sympy`；改为基于 requirements-build |
+| `packaging/README-FIRST.txt` | 新增 | 随包说明（基础版/完整版、**两包解压到同一目录**、MCP、期限、FAQ） |
+| `mcp_ssd_vr/gui_bridge.py` | 修改 | 新 op `sam_probe`（torch/cuda/cupy/medim/torchio/monai + SAM 目录与权重） |
+| `mcp_ssd_vr/tools/cases.py` | 修改 | 新工具 `ssdvr_sam_probe` |
+| `.github/workflows/{main,main-full,macos}.yml` | 重写（**未提交**） | 见 §4.2 |
+| `.gitignore` | 修改 | 忽略 `build_animal_full/` |
+
+提交：`d6c26bf`（CI 依赖/说明/SAM 自检/spec 完整版）、`b25eaa0`（.gitignore）。
+
+## 6. 关键决策
+
+| 决策点 | 选择 | 原因 |
+|---|---|---|
+| CI 产物怎么发 | **Release 资产**而非 artifact | 账号制品存储配额已满；release 资产是另一套配额 |
+| CI 触发条件 | 手动 dispatch + `v*` tag（不再 push 即触发） | 私有仓库按分钟计费；之前每次 push 都跑 3 个构建 |
+| 完整版分发形态 | onedir + **两个可独立解压的 zip** | 解压 5.19 GB、压缩 ~3 GB，超过单资产 2 GB；7z 未装在用户机（CI runner 自带） |
+| 是否随包带 SAM 权重 | 不带（首次自动下载） | 第三方权重许可 + 384 MB 体积 |
+
+## 7. 遗留问题与待办（按优先级）
+
+- [ ] **把 3 个 workflow 送进仓库**（二选一）：
+      ① 你在终端跑 `gh auth refresh -h github.com -s workflow`，之后我直接 `git add .github/workflows && git commit && git push`；
+      ② 用网页 UI 覆盖上传这 3 个文件：
+      `I:\animal_dicom\.github\workflows\{main.yml, main-full.yml, macos.yml}`。
+      **在此之前不要打 tag**：旧 workflow 会在 tag 时把"缺 license_guard 的坏 EXE"附到 Release 上。
+- [ ] 送上新 workflow 后，Actions → 选 workflow → **Run workflow**（或 `gh workflow run`）触发；
+      产物会出现在 `ci-latest` / `ci-latest-full` / `ci-latest-macos` 三个预发布里。
+- [ ] 查一下账号的 Actions 用量/配额（Settings → Billing）：制品配额满 + 私有仓库分钟数可能也接近上限。
+- [ ] **完整版 frangi_channel 端到端**未通过（见 §3 末）；需要时再排查（建议：显存不足时自动回退 CPU，
+      或在 `build_reader` 里对可用显存设阈值）。
+- [ ] 可选：把本地已构建好的完整版（5.19 GB）拆两包直接传 v1.0.0，作为"立刻可用"的产物（未做，等指示）。
+
+## 8. 错误记录
+
+| 时间 | 级别 | 来源 | 描述 | 解决状态 |
+|------|------|------|------|---------|
+| - | error | CI | `Artifact storage quota has been hit`（macOS 编译成功但上传制品失败） | ✅ 改为发 Release；配额本身需用户查 Billing |
+| - | error | CI | 旧 `main.yml` 缺 `license_guard` → 产物会拒启 | ✅ 新 workflow 用 spec + 资源自检 |
+| - | error | 打包 | `collect_all(medim/torchio/monai)` 子进程 exit 3 | ✅ 改 `collect_data_files` |
+| - | error | 冻结版 | `No module named 'cupy_backends.cuda._softlink'` → cupy 失效、Frangi 回退 CPU | ✅ collect_submodules + 显式 hiddenimport |
+| - | error | 冻结版 | `monai` 缺 `sympy` | ✅ 不排除 sympy + 显式 hiddenimport |
+| - | warn | git | push 被拒（远端多了用户的 workflow 上传） | ✅ 备份本地 workflow → rebase → 推送 → 放回 |
+| - | warn | git | rebase 被"本地已改的 workflow"挡住 | ✅ 同上（先移走后放回） |
+| - | info | CI | 我的 push 又触发旧 workflow 的 3 个构建 | ✅ 立即 cancel，并在新 workflow 去掉 push 触发 |
+
+---
+
+## 历史轮次
+<details>
+<summary>Round R-39 — 2026-09-26 | 渲染功能核对 + EXE Release (点击展开)</summary>
+
+# 项目交接文档 — SSD+VR Viewer (animal_dicom)
+
 > 轮次: Round 39 | 时间: 2026-09-26 | 模型: mimo-v2.6-flash-free | 会话: 渲染功能核对 + EXE Release
 
 ---
@@ -4225,6 +4464,10 @@ good/
 （详见旧文档全文，含：解剖标注修正 HFS 体位、字典序排序陷阱、SimpleITK 多文件夹混读、vtkPNGWriter 故障、SSD+VR 体渲染管线参数等）
 
 </details>
+</details>
+
+</details>
+
 </details>
 
 </details>
