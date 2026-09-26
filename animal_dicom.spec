@@ -52,10 +52,15 @@ datas = [
 
 # ---------------------------------------------------------------- binaries
 binaries = []
-_er = os.path.join('exposure-render-master', 'exposure-render-master', 'Source', 'build',
-                   'Release', 'ErCore.dll')
+# ErCore.dll（CUDA 路径追踪引擎，CR / Exposure Render 需要）：
+# 优先用仓库内 vendored 的 packaging/ErCore.dll —— 因为 exposure-render-master/ 在
+# .gitignore 里（体积原因不入库），CI 拿不到它，冻结版就会缺 CR 支持。
+_er = os.path.join('packaging', 'ErCore.dll')
+if not os.path.exists(_er):
+    _er = os.path.join('exposure-render-master', 'exposure-render-master', 'Source', 'build',
+                       'Release', 'ErCore.dll')
 if os.path.exists(_er):
-    binaries.append((_er, '.'))     # CR / Exposure Render 需要
+    binaries.append((_er, '.'))
 else:
     print('[spec] WARNING: 未找到 ErCore.dll，CR 路径追踪模式将不可用')
 

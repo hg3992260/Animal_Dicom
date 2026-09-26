@@ -19,6 +19,8 @@ dist_animal/
 *.egg-info/
 *.dll
 !exposure-render-master/**/ErCore.dll
+# vendored 的 CR 引擎：CI 也必须能拿到它（exposure-render-master/ 整体不入库）
+!packaging/ErCore.dll
 *.exe
 *.so
 *.o
