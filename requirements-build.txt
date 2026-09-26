@@ -1,0 +1,26 @@
+# ============================================================
+# CI / 打包用依赖（**基础版**，不含自动ROI 的 TotalSegmentator/nnunetv2）
+#
+# 为什么不用 requirements.txt：
+#   requirements.txt 里有 TotalSegmentator + nnunetv2 → 会拖入 4.5 GB 的 torch，
+#   而基础版打包既不需要、又会让 CI 多花 20+ 分钟、还容易撑爆 runner 磁盘。
+#   CI 只装"程序真正 import 的东西"。
+#
+# 完整版（含 3D SAM / GPU）请用：requirements-full.txt
+# ============================================================
+PySide6>=6.5.0
+PyCt6>=6.1.0
+vtk>=9.2.0
+numpy>=1.24.0
+scipy>=1.10.0
+SimpleITK>=2.2.0
+nibabel>=5.0.0
+pynetdicom>=2.0.0
+pydicom>=2.3.0
+scikit-image>=0.20.0
+matplotlib>=3.7.0
+Pillow>=10.0.0
+openpyxl>=3.1.0
+# GPU 加速（Frangi 微通道）：缺了也能跑，build_reader 会自动回退 CPU
+cupy-cuda12x>=12.0.0
+pyinstaller>=6.0

@@ -1,19 +1,36 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Animal Dicom v1.0.0 — Windows 基础版打包 spec（PyInstaller 6.x, onedir）。
+"""Animal Dicom v1.0.0 — Windows 打包 spec（PyInstaller 6.x, onedir）。
 
-用法:
-    pyinstaller --clean --noconfirm animal_dicom.spec
+两种形态（同一个 spec，用环境变量切换）：
+
+  # 基础版（默认）：424 MB zip / 1.16 GB 解压
+  pyinstaller --clean --noconfirm animal_dicom.spec
+
+  # 完整版：含 GPU 加速（cupy + CUDA 运行时）与 3D SAM（torch + medim + torchio + monai）
+  #   预计 ~8 GB 解压；zip 需拆成两个 <2 GB 的包（GitHub 单资产上限）
+  set ANIMAL_DICOM_FULL=1 && pyinstaller --clean --noconfirm animal_dicom.spec
+
+完整版构建后**必须**把 frame/SAM-Med3D-main 拷到 exe 同级目录
+（segmentation/config.py 在冻结模式下按 sys.executable 目录找 SAM_MED3D_DIR）：
+  xcopy /E /I /Y frame\\SAM-Med3D-main dist_full\\Animal_Dicom\\frame\\SAM-Med3D-main
+权重 sam_med3d_turbo.pth（384 MB）**不随包分发**（第三方权重许可 + 体积）：
+首次使用 3D SAM 时由 sam_adapter 自动从 HuggingFace 下载，或手动放入
+frame/SAM-Med3D-main/ckpt/。
 
 与 build.yaml 的差异（为什么单独写 spec）：
-  1. **明确排除** 4.5 GB 的 torch 及 totalsegmentator/nnunetv2/medim/torchio/dipy/monai
-     —— 自动 ROI 已移除、3D SAM 属"完整版"才带的功能（完整版见 build_full / Full_Win 产物）。
+  1. **明确排除** 4.5 GB 的 torch 及 totalsegmentator/nnunetv2 等（基础版）；
      因此不能对 segmentation 用 collect_submodules（会把 import torch 的检测器全拉进来）。
-  2. **保留** cupy-cuda12x + nvidia（约 0.5 GB）：Frangi 微通道等 GPU 渲染路径不降级。
-  3. 显式带上 license_guard / skin / 病例模板等运行期资源（缺失会拒启或丢皮肤）。
+  2. 基础版排除 cupy/cupyx/nvidia（约 1.9 GB CUDA 运行时），完整版保留。
+  3. 显式带上 license_guard / 皮肤 / 病例模板等运行期资源（缺失会拒启或丢皮肤）。
+  4. **PyCt6 必须连数据文件收集**（widgets/themes/*.json 等），否则启动即崩。
 """
 import os
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+
+FULL = os.environ.get('ANIMAL_DICOM_FULL') == '1'
+DIST_NAME = 'Animal_Dicom_Full' if FULL else 'Animal_Dicom'
+print('[spec] 形态: %s' % ('完整版（含 GPU + 3D SAM）' if FULL else '基础版（无 GPU/3D SAM）'))
 
 PROJ = os.path.abspath(os.getcwd())
 
@@ -47,7 +64,11 @@ else:
 # widgets/images/*.png、windows/images/logo.png）。只写 hiddenimports 会把 .py 收进
 # PYZ，而主题 JSON 不会随之打包 → set_color_theme() 启动即 FileNotFoundError。
 # 因此必须连数据一起收集。
-for pkg in ('PySide6', 'PyCt6', 'vtkmodules', 'SimpleITK', 'skimage', 'scipy'):
+_PKGS = ['PySide6', 'PyCt6', 'vtkmodules', 'SimpleITK', 'skimage', 'scipy']
+if FULL:
+    # GPU 加速：cupy/cupyx 的 collect_all 正常
+    _PKGS += ['cupy', 'cupyx']
+for pkg in _PKGS:
     try:
         d, b, h = collect_all(pkg)
         datas += d
@@ -93,15 +114,45 @@ hiddenimports += [
     'mcp_ssd_vr.tools.inspect', 'mcp_ssd_vr.tools.lifecycle', 'mcp_ssd_vr.tools.recording',
 ]
 
+if FULL:
+    hiddenimports += [
+        # 3D SAM 链路：viewer → segmentation.sam_pipeline → sam_adapter(medim/torchio/torch)
+        'torch', 'torch.nn', 'torch.utils', 'torch.serialization', 'torch.cuda',
+        'torchio', 'medim', 'monai',
+        'cupy', 'cupyx',
+        'segmentation.sam_pipeline', 'segmentation.sam_adapter',
+        'segment_anything', 'segment_anything.modeling',
+    ]
+    # 注：medim/torchio/monai **不能**用 collect_all/collect_submodules ——
+    # 它们 import torch，而 PyInstaller 的"收集子模块"是**独立子进程**，会因
+    # torch 的 libiomp5 与 VTK/SimpleITK 的 OpenMP 重复初始化而崩溃（exit code 3）。
+    # 只收数据文件，模块交给静态分析 + 上面的 hiddenimports。
+    for _p in ('medim', 'torchio', 'monai'):
+        try:
+            datas += collect_data_files(_p)
+        except Exception as _e:  # noqa: BLE001
+            print('[spec] collect_data_files(%s) 失败: %s' % (_p, _e))
+    # cupy 不 import torch → 可以安全收集子模块。
+    # 必须收 cupy_backends.*：cupy 的 CUDA 后端是**动态 softlink 模块**
+    # （cupy_backends.cuda._softlink），漏了就会 ModuleNotFoundError →
+    # import cupy 失败 → Frangi 静默回退 CPU。
+    for _p in ('cupy', 'cupyx', 'cupy_backends'):
+        try:
+            hiddenimports += collect_submodules(_p)
+        except Exception as _e:  # noqa: BLE001
+            print('[spec] collect_submodules(%s) 失败: %s' % (_p, _e))
+    hiddenimports += [
+        'cupy_backends.cuda._softlink', 'cupy_backends.cuda.libs',
+        'fastrlock', 'fastrlock.rlock',
+        # monai 的 import 链依赖 sympy（mpmath）；monai 是**延迟** import，
+        # PyInstaller 静态分析看不到 → 必须显式写进来，否则 monai ImportError
+        'sympy', 'mpmath',
+    ]
+
 # ---------------------------------------------------------------- excludes
 excludes = [
-    # 完整版才带的超大依赖（本 spec = 基础版）
-    'torch', 'torchvision', 'torchio', 'medim', 'dipy', 'monai',
-    'totalsegmentator', 'nnunetv2', 'batchgenerators', 'medpy',
-    # CUDA 运行时（cublasLt/cusparse/cufft… 合计 ~1.9 GB，因为 cupy 而被整链拉入）。
-    # 排除后 cupy 无法 import → build_reader 走 CPU 回退（既有降级路径），
-    # 体积从 3.6 GB 降到 ~1.3 GB，才能作为 Release 资产（单资产上限 2 GB）。
-    'cupy', 'cupyx', 'cupy_backends', 'nvidia',
+    # 自动 ROI 已移除 → 这些检测器依赖不进包（无论基础版/完整版）
+    'totalsegmentator', 'nnunetv2', 'batchgenerators', 'medpy', 'dipy',
     # 未被本程序使用的重依赖
     'pyarrow', 'av', 'pandas', 'sqlalchemy', 'fsspec', 's3fs', 'boto3',
     # 本环境装的其它 Qt 绑定：PyInstaller 不允许与 PySide6 混用（会直接 Aborting）
@@ -111,10 +162,18 @@ excludes = [
     'matplotlib.backends.backend_qt6agg', 'matplotlib.backends.backend_qtquick',
     'qtpy', 'QtPy',
     'tests', 'pytest', 'IPython', 'notebook', 'jupyter', 'jupyter_core',
-    'tkinter', 'cv2', 'sympy', 'onnx', 'tensorboard', 'tensorflow',
+    'tkinter', 'cv2', 'onnx', 'tensorboard', 'tensorflow',
     'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtQuick',
     'PySide6.QtQml', 'PySide6.Qt3DCore', 'PySide6.QtMultimedia',
 ]
+
+if not FULL:
+    # 基础版：剔除 GPU 加速（cupy + CUDA 运行时 ~1.9 GB）与 3D SAM（torch ~4.5 GB）
+    excludes += [
+        'torch', 'torchvision', 'torchio', 'medim', 'monai', 'sympy',
+        'cupy', 'cupyx', 'cupy_backends', 'nvidia',
+    ]
+# 完整版保留 sympy：monai 的 import 链依赖它（缺了 monai 直接 ImportError）
 
 # collect_all('PySide6') 会把 QtWebEngine 的二进制/调试资源一起塞进来（~270 MB），
 # 本程序完全用不到 → 在 Analysis 之后按名字过滤掉。
@@ -162,5 +221,6 @@ coll = COLLECT(
     exe, a.binaries, a.zipfiles, a.datas,
     strip=False,
     upx=False,
-    name='Animal_Dicom',
+    name=DIST_NAME,
 )
+print('[spec] 产物目录: %s' % DIST_NAME)

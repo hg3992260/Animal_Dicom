@@ -256,6 +256,17 @@ def register(mcp) -> None:
                         tool_name="ssdvr_pacs_retrieve")
         return {"ok": ok, **data}
 
+    # ---------------- 3D SAM 栈自检（冻结版诊断）----------------
+    @mcp.tool()
+    def ssdvr_sam_probe() -> dict:
+        """3D SAM 依赖自检：torch/torchio/medim/monai/cupy 版本、CUDA 可用性、
+        SAM-Med3D 目录与权重是否存在、sam_adapter 能否 import。
+
+        便携包没有控制台，靠它确认分割依赖是否齐全（尤其"基础版"缺 torch 时）。
+        """
+        ok, data = call("sam_probe", {}, timeout=180.0, tool_name="ssdvr_sam_probe")
+        return {"ok": ok, **data}
+
     # ---------------- 运行期限（30 天强制）----------------
     @mcp.tool()
     def ssdvr_trial_status() -> dict:

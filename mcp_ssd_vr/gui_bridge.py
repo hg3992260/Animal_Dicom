@@ -733,6 +733,8 @@ class _Dispatcher(QtCore.QObject):
             return self._pacs_op("retrieve", args)
         if op == "ai_get_state":
             return {"ok": True, **_ai_state(win)}
+        if op == "sam_probe":
+            return self._sam_probe()
         if op == "trial_status":
             return {"ok": True, "trial": _trial_state()}
         if op == "ai_run":
@@ -1534,6 +1536,54 @@ class _Dispatcher(QtCore.QObject):
         return {"ok": True, "action": what, "accepted": True,
                 "note": "PACS 操作在后台线程执行，可轮询 query_state().pacs.status",
                 "pacs": _pacs_state(win)}
+
+    def _sam_probe(self) -> Dict[str, Any]:
+        """3D SAM 栈自检：torch / torchio / medim / monai / cupy + CUDA + 权重路径。
+
+        冻结版（便携包）里没有控制台，靠它一条 op 就能确认分割依赖是否齐全。
+        """
+        import importlib
+
+        info: Dict[str, Any] = {}
+        for name in ("torch", "torchio", "medim", "monai"):
+            try:
+                mod = importlib.import_module(name)
+                info[name] = str(getattr(mod, "__version__", "ok"))
+            except Exception as e:  # noqa: BLE001
+                info[name] = "缺失: %s" % e
+        try:
+            import torch
+            cuda = bool(torch.cuda.is_available())
+            info["cuda_available"] = cuda
+            info["cuda_device"] = torch.cuda.get_device_name(0) if cuda else ""
+        except Exception as e:  # noqa: BLE001
+            info["cuda_available"] = False
+            info["cuda_error"] = str(e)
+        try:
+            import cupy
+            info["cupy"] = str(cupy.__version__)
+            try:
+                info["cupy_gpu"] = bool(cupy.cuda.runtime.getDeviceCount() > 0)
+            except Exception as e:  # noqa: BLE001
+                info["cupy_gpu"] = False
+                info["cupy_error"] = str(e)
+        except Exception as e:  # noqa: BLE001
+            info["cupy"] = "缺失: %s" % e
+        try:
+            from segmentation import config as segcfg
+            info["sam_dir"] = segcfg.SAM_MED3D_DIR
+            info["sam_dir_exists"] = os.path.isdir(segcfg.SAM_MED3D_DIR)
+            info["ckpt"] = segcfg.SAM_CKPT
+            info["ckpt_exists"] = os.path.isfile(segcfg.SAM_CKPT)
+        except Exception as e:  # noqa: BLE001
+            info["sam_dir"] = "config 读取失败: %s" % e
+        try:
+            from segmentation.sam_adapter import SAMMed3DAdapter  # noqa: F401
+            info["sam_adapter_import"] = "ok"
+        except Exception as e:  # noqa: BLE001
+            info["sam_adapter_import"] = "失败: %s" % e
+        info["ok"] = not str(info.get("torch", "")).startswith("缺失")
+        return info
 
     def _ai_run(self, args: Dict[str, Any]) -> Dict[str, Any]:
         win = self.win
