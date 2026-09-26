@@ -1,24 +1,30 @@
 # ============================================================
 # 完整版依赖（GPU 加速 + 3D SAM / SAM-Med3D）—— CI 与本地通用
 #
-# 用法:
-#   1) 先装 CUDA 版 PyTorch（**必须**带 --index-url，否则会装成 CPU 版）:
-#        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
-#   2) 再装本文件:
-#        pip install -r requirements-full.txt
-#   3) SAM-Med3D 代码放到 frame/SAM-Med3D-main（含 utils/、segment_anything/）:
-#        git clone --depth 1 https://github.com/uni-medical/SAM-Med3D.git frame/SAM-Med3D-main
-#      权重 sam_med3d_turbo.pth（~384 MB）首次使用 3D SAM 时自动下载，
-#      也可手动放入 frame/SAM-Med3D-main/ckpt/
-#   说明: torch 不写在本文件内（避免被 PyPI 的 CPU 轮子覆盖）。
+# 用法（一条命令即可，torch 的 CUDA 轮子由本文件的 extra-index-url 指定）:
+#     pip install -r requirements-full.txt
 #
-# ⚠️ 这里基于 requirements-build.txt（**不是** requirements.txt）：
-#   requirements.txt 含 TotalSegmentator / nnunetv2 → 会拖入 4.5 GB torch 与一堆
-#   与 GUI 无关的包（自动 ROI 功能已移除），既慢又容易装出依赖冲突；
-#   requirements-build.txt 才带 pyinstaller（缺它 full 任务会在构建步骤直接报
-#   "The term 'pyinstaller' is not recognized"）。
+# 说明:
+#   · torch / torchvision 必须用 **CUDA 轮子**（+cu124）。之前只写成"另外一条 pip 命令"，
+#     在 CI 上出现过：先装好 cu124，随后 pip 解析本文件其它依赖时把 torch 换成了
+#     PyPI 的 CPU 版 → 产物没有 GPU 支持（表现为 torch/lib 里没有 torch_cuda.dll）。
+#     现在把 `--extra-index-url` + `torch==...+cu124` 写进本文件，pin 死版本，
+#     任何依赖都无法把它降级（不满足就直接报错，而不是静默变 CPU 版）。
+#   · SAM-Med3D 代码放到 frame/SAM-Med3D-main（含 utils/、segment_anything/）:
+#        git clone --depth 1 https://github.com/uni-medical/SAM-Med3D.git frame/SAM-Med3D-main
+#     权重 sam_med3d_turbo.pth（~384 MB）首次使用 3D SAM 时自动下载，
+#     也可手动放入 frame/SAM-Med3D-main/ckpt/
+#   · 本文件基于 requirements-build.txt（**不是** requirements.txt）：
+#     requirements.txt 含 TotalSegmentator / nnunetv2 → 会拖入一堆与 GUI 无关、
+#     且会干扰 torch 解析的包（自动 ROI 功能已移除）；requirements-build.txt 才带 pyinstaller。
 # ============================================================
+--extra-index-url https://download.pytorch.org/whl/cu124
+
 -r requirements-build.txt
+
+# PyTorch（CUDA 12.4，版本 pin 死）
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
 
 # 3D SAM (SAM-Med3D) 运行时
 medim>=0.1.2

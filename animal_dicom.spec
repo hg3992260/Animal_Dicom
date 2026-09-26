@@ -157,6 +157,25 @@ if FULL:
             print('[spec] collect_dynamic_libs(%s): %d 项' % (_p, len(_libs)))
         except Exception as _e:  # noqa: BLE001
             print('[spec] collect_dynamic_libs(%s) 失败: %s' % (_p, _e))
+
+    # 硬性校验：FULL 版必须是 **CUDA 版 torch**，否则产物没有 GPU 支持。
+    # CI 上真实踩过：先装好 cu124，随后 pip 解析其它依赖时被换成 PyPI 的 CPU 版
+    # （表现：torch/lib 里没有 torch_cuda.dll，包体也小很多）。
+    # 这里直接让构建失败并给出明确原因，而不是产出"看起来完整、实际没有 GPU"的包。
+    try:
+        import torch as _torch
+        _cuda = getattr(_torch.version, "cuda", None)
+        print('[spec] torch=%s  torch.version.cuda=%s' % (_torch.__version__, _cuda))
+        if not _cuda:
+            raise SystemExit(
+                "[spec] 致命错误：FULL 版需要 CUDA 版 torch，当前是 CPU 版（%s）。\n"
+                "        请用 `pip install -r requirements-full.txt`（内含 extra-index-url\n"
+                "        + torch==2.6.0+cu124），不要在装完之后再让其它依赖重解析 torch。"
+                % _torch.__version__)
+    except SystemExit:
+        raise
+    except Exception as _e:  # noqa: BLE001
+        print('[spec] torch CUDA 校验跳过（%s）' % _e)
     hiddenimports += [
         'cupy_backends.cuda._softlink', 'cupy_backends.cuda.libs',
         'fastrlock', 'fastrlock.rlock',
