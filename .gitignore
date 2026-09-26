@@ -15,6 +15,7 @@ build/
 dist/
 build_animal/
 build_animal_full/
+pkg_part*/
 dist_animal/
 *.egg-info/
 *.dll
