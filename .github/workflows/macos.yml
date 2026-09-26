@@ -7,14 +7,10 @@ name: Build SSD+VR for macOS (DMG + App)
 # 并在构建前 / 构建后各有一道门禁。
 
 on:
-  push:
-    branches: [main, master]
-    # tag 也要触发，否则那些 if: refs/tags/v 的 Release 步骤永远不会执行
-    tags: ['v*']
-    # 文档改动不必重新打包（否则一个 README 提交就会产出 DMG + .app 两个产物）
-    paths-ignore:
-      - '**/*.md'
+  # 与两个 Windows workflow 保持一致：只在手动触发 / 打 tag 时跑（省私有仓库 Actions 分钟数）
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 jobs:
   build:

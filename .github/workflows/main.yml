@@ -47,7 +47,9 @@ jobs:
           KMP_DUPLICATE_LIB_OK: "TRUE"
           OMP_NUM_THREADS: "1"
           PYTHONUTF8: "1"
-        run: pyinstaller --clean --noconfirm --log-level=WARN animal_dicom.spec
+        # 注意 --distpath：spec 本身不带输出目录，PyInstaller 默认写 dist/，
+        # 而下面的打包步骤固定读 dist_animal/ —— 不传就会"构建成功但找不到产物"。
+        run: pyinstaller --clean --noconfirm --log-level=WARN --distpath dist_animal --workpath build_animal animal_dicom.spec
 
       - name: Package + 资源自检 + zip
         shell: pwsh

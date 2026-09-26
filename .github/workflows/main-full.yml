@@ -62,7 +62,8 @@ jobs:
         shell: pwsh
         run: |
           # 代码按 segmentation/config.py 的约定放在 frame/SAM-Med3D-main
-          git clone --depth 1 https://github.com/blueyo0/SAM-Med3D.git frame/SAM-Med3D-main
+          # 官方仓库是 uni-medical/SAM-Med3D（blueyo0 是 HuggingFace 账号，git clone 会要凭据 → 失败）
+          git clone --depth 1 https://github.com/uni-medical/SAM-Med3D.git frame/SAM-Med3D-main
           if (-not (Test-Path "frame/SAM-Med3D-main/utils")) { throw "SAM-Med3D 拉取失败" }
           New-Item -ItemType Directory -Force -Path "frame/SAM-Med3D-main/ckpt" | Out-Null
 
@@ -72,7 +73,8 @@ jobs:
           KMP_DUPLICATE_LIB_OK: "TRUE"
           OMP_NUM_THREADS: "1"
           PYTHONUTF8: "1"
-        run: pyinstaller --clean --noconfirm --log-level=WARN animal_dicom.spec
+        # 必须带 --distpath（spec 不带输出目录，默认写 dist/）
+        run: pyinstaller --clean --noconfirm --log-level=WARN --distpath dist_animal --workpath build_animal_full animal_dicom.spec
 
       - name: Package（资源自检 + frame + 两包 zip）
         shell: pwsh
