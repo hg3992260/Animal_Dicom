@@ -1,4 +1,4 @@
-# Python cache
+﻿# Python cache
 __pycache__/
 *.pyc
 *.pyo
@@ -14,6 +14,7 @@ ckpt/
 build/
 dist/
 build_animal/
+build_animal_full/
 dist_animal/
 *.egg-info/
 *.dll
