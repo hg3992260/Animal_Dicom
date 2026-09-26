@@ -26,7 +26,8 @@ frame/SAM-Med3D-main/ckpt/。
 """
 import os
 
-from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import (collect_all, collect_data_files, collect_dynamic_libs,
+                                     collect_submodules)
 
 FULL = os.environ.get('ANIMAL_DICOM_FULL') == '1'
 DIST_NAME = 'Animal_Dicom_Full' if FULL else 'Animal_Dicom'
@@ -146,6 +147,16 @@ if FULL:
             hiddenimports += collect_submodules(_p)
         except Exception as _e:  # noqa: BLE001
             print('[spec] collect_submodules(%s) 失败: %s' % (_p, _e))
+    # torch 的原生库必须**显式**收集：PyInstaller 自带的 torch hook 在 CI 上
+    # 没把 torch/lib 里的深层 CUDA 库（torch_cuda.dll 913MB / cudnn / cublasLt …）
+    # 全带进包，结果是"装的是 cu124 但产物没有 GPU 支持"（本地与 CI 表现不一致）。
+    for _p in ('torch', 'cupy'):
+        try:
+            _libs = collect_dynamic_libs(_p)
+            binaries += _libs
+            print('[spec] collect_dynamic_libs(%s): %d 项' % (_p, len(_libs)))
+        except Exception as _e:  # noqa: BLE001
+            print('[spec] collect_dynamic_libs(%s) 失败: %s' % (_p, _e))
     hiddenimports += [
         'cupy_backends.cuda._softlink', 'cupy_backends.cuda.libs',
         'fastrlock', 'fastrlock.rlock',
