@@ -1,14 +1,29 @@
-name: Build SSD+VR for Windows (EXE)
+name: Build Windows EXE (base)
+
+# ============================================================
+# 基础版 Windows 便携包（无 GPU / 无 3D SAM，约 424 MB zip）
+#
+# 为什么改成用 animal_dicom.spec：
+#   之前的内联 pyinstaller 参数漏了 license_guard（→ 冻结版启动即"完整性检查失败"）、
+#   皮肤/主题/病例模板数据文件（→ 丢皮肤）、PyCt6 数据文件（→ 启动即崩）。
+#   spec 里这些都固化了，并由下面的"资源自检"步骤兜底。
+#
+# 为什么不再用 actions/upload-artifact：
+#   账号的 Actions 制品存储配额已满（Artifact storage quota has been hit），
+#   制品会直接上传失败；Release 资产是另一套配额，所以统一走 Release。
+#
+# 触发方式：
+#   · 打 tag（v*）→ 传到该 tag 的 Release（正式版）
+#   · 手动 Run workflow → 传到滚动 tag `ci-latest`（预发布，便于随时取最新构建）
+# ============================================================
 
 on:
-  push:
-    branches: [main, master]
-    # tag 也要触发，否则那些 if: refs/tags/v 的 Release 步骤永远不会执行
-    tags: ['v*']
-    # 文档改动不必重新打包（曾经一个 README 提交就触发一次完整 EXE 构建 + 644 MB 产物）
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write          # 创建/更新 Release 需要
 
 jobs:
   build:
@@ -19,111 +34,67 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps (base)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install cupy-cuda12x
-          pip install pyinstaller
+          pip install -r requirements-build.txt
 
-      - name: Build EXE
+      - name: Build (animal_dicom.spec)
+        env:
+          # torch/libiomp5 与 VTK/SimpleITK 的 OpenMP 重复初始化会让子进程崩溃
+          KMP_DUPLICATE_LIB_OK: "TRUE"
+          OMP_NUM_THREADS: "1"
+          PYTHONUTF8: "1"
+        run: pyinstaller --clean --noconfirm --log-level=WARN animal_dicom.spec
+
+      - name: Package + 资源自检 + zip
         shell: pwsh
         run: |
-          $er = "exposure-render-master/exposure-render-master/Source/build/Release/ErCore.dll"
-          $args = @(
-            "--onefile", "--noconsole", "--name=SSD_VR_Fusion_Viewer", "--icon=logo.ico",
-            "--runtime-hook=pyi_rth_vcruntime.py",
-            "--add-data=scientific.json;.", "--add-data=dark.qss;.",
-            "--add-data=presets.xml;.", "--add-data=logo.ico;.", "--add-data=logo.png;.",
-            "--add-data=segmentation;segmentation",
-            "--add-data=mcp_ssd_vr;mcp_ssd_vr",
-            "--collect-all=PySide6", "--collect-all=PyCt6", "--collect-submodules=PyCt6",
-            "--collect-data=PyCt6", "--collect-all=vtkmodules", "--collect-all=SimpleITK",
-            "--hidden-import=PyCt6", "--hidden-import=PyCt6.widgets.c_button",
-            "--hidden-import=PyCt6.widgets.c_label", "--hidden-import=PyCt6.widgets.c_line_edit",
-            "--hidden-import=PyCt6.widgets.c_combo_box", "--hidden-import=PyCt6.widgets.c_slider",
-            "--hidden-import=PyCt6.widgets.c_frame", "--hidden-import=PyCt6.widgets.c_text_edit",
-            "--hidden-import=PyCt6.windows.c_main_window", "--hidden-import=PyCt6.windows.c_toplevel",
-            "--hidden-import=PyCt6.appearance.theme_manager", "--hidden-import=PyCt6.appearance.mode_manager",
-            "--hidden-import=PySide6.QtSvg", "--hidden-import=PySide6.QtSvgWidgets",
-            "--hidden-import=vtkmodules.qt.QVTKRenderWindowInteractor",
-            "--hidden-import=scipy.ndimage", "--hidden-import=skimage.restoration",
-            "--hidden-import=skimage.filters", "--hidden-import=nibabel",
-            "--hidden-import=pacs_client", "--hidden-import=pynetdicom",
-            "--hidden-import=pynetdicom.sop_class", "--hidden-import=pydicom",
-            "--hidden-import=segmentation.roi_pipeline", "--hidden-import=segmentation.roi_types",
-            "--hidden-import=segmentation.roi_label_map",
-            "--hidden-import=segmentation.detectors.semantic_detector",
-            "--hidden-import=mcp_ssd_vr.gui_bridge", "--hidden-import=mcp_ssd_vr.bridge_client",
-            "--hidden-import=mcp_ssd_vr.bridge_registry",
-            "--hidden-import=mcp_ssd_vr.state", "--hidden-import=mcp_ssd_vr.config",
-            "--hidden-import=mcp_ssd_vr.recorder",
-            "--exclude-module=tkinter",
-            "--exclude-module=medim", "--exclude-module=torchio",
-            "--exclude-module=dipy", "--exclude-module=monai"
+          $dist = "dist_animal/Animal_Dicom"
+          if (-not (Test-Path $dist)) { throw "构建产物不存在: $dist" }
+
+          Copy-Item packaging/README-FIRST.txt "$dist/README-FIRST.txt" -Force
+
+          # 资源自检：少任何一个都会导致"拒启/丢皮肤/启动即崩"
+          $need = @(
+            "Animal_Dicom.exe",
+            "_internal/retro.qss", "_internal/light.qss", "_internal/dark.qss",
+            "_internal/warm_orange.json", "_internal/case_template.json",
+            "_internal/presets.xml", "_internal/render_templates.json",
+            "_internal/logo.ico",
+            "_internal/PyCt6/widgets/themes/orange.json",
+            "_internal/PySide6/plugins/platforms/qwindows.dll",
+            "_internal/ErCore.dll"
           )
-          if (Test-Path $er) { $args += "--add-binary=$er;." }
-
-          # ============================================================
-          # 修复 PyInstallerImportError: Failed to load dynlib/dll
-          #   ...\sklearn\.libs\vcomp140.dll
-          # sklearn/_distributor_init.py 无条件 WinDLL(<sklearn>/.libs/vcomp140.dll)，
-          # 而 .libs 是点开头的隐藏目录，分发/打包环节容易把它丢掉。
-          # PyInstaller 的 pyimod03_ctypes._frozen_name() 在原路径不存在时，
-          # 会回退到 $MEIPASS\<basename>；把运行库放进 $MEIPASS 根目录即可兜底。
-          # ============================================================
-          $pyBase = (python -c "import sys;print(sys.base_prefix)").Trim()
-          $skLibs = ""
-          try {
-            $skLibs = (python -c "import sklearn,os;print(os.path.join(os.path.dirname(sklearn.__file__),'.libs'))" 2>$null).Trim()
-          } catch { $skLibs = "" }
-
-          $searchDirs = @()
-          if ($skLibs) { $searchDirs += $skLibs }
-          $searchDirs += $pyBase
-          $searchDirs += (Join-Path $env:SystemRoot "System32")
-
-          $placed = @()
-          foreach ($d in @("vcomp140.dll","msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")) {
-            $src = $null
-            foreach ($dir in $searchDirs) {
-              if (-not $dir) { continue }
-              $cand = Join-Path $dir $d
-              if (Test-Path -LiteralPath $cand) { $src = $cand; break }
-            }
-            if ($src) {
-              $args += "--add-binary=$src;."
-              $placed += $d
-            } else {
-              Write-Warning "找不到运行库: $d"
-            }
+          $missing = @()
+          foreach ($f in $need) {
+            if (-not (Test-Path (Join-Path $dist $f))) { $missing += $f }
           }
-          Write-Host ("staged into `$MEIPASS: " + ($placed -join ", "))
-          foreach ($need in @("vcomp140.dll","msvcp140.dll")) {
-            if ($placed -notcontains $need) {
-              throw "$need 在 sklearn/.libs、Python 目录、System32 中均未找到，无法避免 sklearn 导入失败。"
-            }
-          }
+          if ($missing.Count) { throw ("缺关键文件: " + ($missing -join ", ")) }
+          Write-Host "资源自检通过（$($need.Count) 项）"
 
-          pyinstaller @args ssd_vr_viewer.py
+          # license_guard 会被 main() import；缺了会直接拒启（退出码 4）
+          if (-not (Test-Path "license_guard.py")) { throw "license_guard.py 丢失" }
+          python -c "import ast,pathlib; ast.parse(pathlib.Path('license_guard.py').read_text(encoding='utf-8')); print('license_guard.py OK')"
 
-      - name: Upload EXE
-        # tag 运行时跳过 artifact（Release 资产是另一套配额；产物配额满了会连带掐死 Release 步骤）
-        if: github.ref_type == 'branch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SSD_VR_Fusion_Viewer_Win
-          path: dist/SSD_VR_Fusion_Viewer.exe
-          # 产物 644 MB/次，保留期不要长；需要长期保存请打 tag 走 Release
-          retention-days: 3
+          $ver = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}' } `
+                 else { 'ci-' + '${{ github.sha }}'.Substring(0, 7) }
+          $zip = "Animal_Dicom_${ver}_win64_portable.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          7z a -tzip -mx=5 $zip ".\dist_animal\Animal_Dicom" | Out-Null
+          if (-not (Test-Path $zip)) { throw "zip 失败" }
+          $mb = (Get-Item $zip).Length / 1MB
+          Write-Host ("zip = {0:N1} MB" -f $mb)
+          if ($mb -gt 1900) { throw ("zip 超过 GitHub 单资产 2GB 上限: {0:N1} MB" -f $mb) }
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Release (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SSD_VR_Fusion_Viewer.exe
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'ci-latest' }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || 'CI latest (base)' }}
+          prerelease: ${{ github.ref_type != 'tag' }}
+          files: ${{ env.ZIP }}
+          fail_on_unmatched_files: true

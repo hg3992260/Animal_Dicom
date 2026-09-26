@@ -113,30 +113,25 @@ jobs:
           echo "--- cocoa 插件 ---"; find "$APP_IN_DMG" -name 'libqcocoa.dylib' -type f
           hdiutil detach /tmp/dmgmnt
 
-      - name: Upload DMG
-        # tag 运行时跳过 artifact（Release 资产是另一套配额；产物配额满了会连带掐死 Release 步骤）
-        if: github.ref_type == 'branch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SSD_VR_Fusion_Viewer_macOS
-          path: dist/SSD_VR_Fusion_Viewer.dmg
-          retention-days: 3
+      # 注：账号的 Actions 制品存储配额已满（Artifact storage quota has been hit），
+      # 原来这里的 actions/upload-artifact 会直接失败 → 统一改成发 Release 资产。
+      - name: Rename DMG (统一命名)
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then VER="${{ github.ref_name }}"; else VER="ci-$(echo ${{ github.sha }} | cut -c1-7)"; fi
+          OUT="Animal_Dicom_${VER}_macOS.dmg"
+          mv dist/SSD_VR_Fusion_Viewer.dmg "dist/$OUT"
+          echo "DMG=$OUT" >> "$GITHUB_ENV"
+          ls -lh "dist/$OUT"
 
-      # .app 有 700+ MB，日常推送不再上传（DMG 里已包含）；分支上手动触发时才产出
-      - name: Upload .app (manual dispatch on a branch only)
-        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'branch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: SSD_VR_Fusion_Viewer_app
-          path: dist/SSD_VR_Fusion_Viewer.app
-          include-hidden-files: true
-          retention-days: 3
-
-      - name: Release (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish DMG to Release
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SSD_VR_Fusion_Viewer.dmg
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'ci-latest-macos' }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || 'CI latest (macOS DMG)' }}
+          prerelease: ${{ github.ref_type != 'tag' }}
+          files: dist/${{ env.DMG }}
+          fail_on_unmatched_files: true
